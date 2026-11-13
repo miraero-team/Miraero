@@ -12,6 +12,10 @@ import ai.pleos.playground.navi.helper.listener.NaviHelperEventListener
 import ai.pleos.playground.vehicle.Vehicle
 import ai.pleos.playground.vehicle.api.model.area.SeatArea
 import ai.pleos.playground.vehicle.constant.area.SeatValue
+import ai.pleos.playground.vehicle.constant.control.VehicleGear
+import ai.pleos.playground.vehicle.listener.GearSelectionListener
+import android.view.View
+import android.widget.TextView
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -76,6 +80,26 @@ class MainActivity : AppCompatActivity() {
 
     private var routeReceived = false
     private var destReceived = false
+
+    // ===== 화면 상태 =====
+    private var parked = false                   // 기어 P
+    private var cardClosed = false               // 정차 카드 [닫기] 누름
+    private var shownEvent: EventCard? = null    // 경로에 걸린 행사 1등
+    private var demoEvent: EventCard? = null     // 확인용으로 고정한 행사
+    private var arrivePercent: Double? = null    // 도착 배터리
+
+    private val gearListener = object : GearSelectionListener {
+        override fun onSelected(gear: VehicleGear?) {
+            Log.d("PLEOS_TEST", "기어 = $gear")
+            val nowParked = gear == VehicleGear.GEAR_PARK
+            if (nowParked && !parked) cardClosed = false   // 새로 정차하면 카드 다시 보여줌
+            parked = nowParked
+            runOnUiThread { render() }
+        }
+        override fun onFailed(e: Exception) {
+            Log.e("PLEOS_TEST", "기어 실패: ${e.message}")
+        }
+    }
     // 20초마다 다시 판단
     private val loopHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val recheckLoop = object : Runnable {
@@ -148,6 +172,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         events = EventRepository.load(this)
+        // ponytail: 화면 확인·촬영용. adb shell am start -S -n com.miraero.driveapp/.MainActivity --es demoEvent kspo_concert
+        demoEvent = events.firstOrNull { it.id == intent.getStringExtra("demoEvent") }
+        shownEvent = demoEvent
         Log.d("PLEOS_TEST", "행사 카드 ${events.size}장 로드")
 
 
@@ -155,15 +182,29 @@ class MainActivity : AppCompatActivity() {
 
         vehicle = Vehicle(this)
         vehicle.initialize()
+        vehicle.getGear().registerGearSelection(gearListener)
+
+        findViewById<View>(R.id.btnPlaylist).setOnClickListener { openPlaylist() }
+        findViewById<View>(R.id.btnClose).setOnClickListener {
+            cardClosed = true
+            render()
+        }
+        render()
 
         naviHelper = NaviHelper(this)
-        naviHelper.initialize()
         naviRef = naviHelper
         naviHelper.addListener(naviListener)
-        naviHelper.getRouteStateInfo()
-        naviHelper.getDestinationInfo()
-        naviHelper.getCurrentLocationInfo()
-        naviHelper.getTBTInfo()
+        // 내비 서비스 연결이 끝난 뒤에 요청해야 응답이 옴
+        naviHelper.initialize(
+            {
+                Log.d("PLEOS_TEST", "내비 연결 성공")
+                naviHelper.getRouteStateInfo()
+                naviHelper.getDestinationInfo()
+                naviHelper.getCurrentLocationInfo()
+                naviHelper.getTBTInfo()
+            },
+            { e -> Log.e("PLEOS_TEST", "내비 연결 실패: ${e.message}") }
+        )
         loopHandler.postDelayed(recheckLoop, 20_000)
     }
 
@@ -231,7 +272,14 @@ class MainActivity : AppCompatActivity() {
             Log.d("PLEOS_TEST", "행사 매칭: ${it.event.name} (점수 ${it.score}, 목적지까지 ${"%.1f".format(it.distToDestKm)}km, 정체도로 ${it.matchedRoads})")
         }
         val best = matches.firstOrNull()
-        val eventPart = best?.let { "오늘 ${it.event.name} 영향으로 " } ?: ""
+        shownEvent = demoEvent ?: best?.event
+        arrivePercent = r.arrivePercent
+        runOnUiThread { render() }
+        if (best == null) {
+            Log.d("PLEOS_TEST", "경로에 걸린 행사 없음 → 알림 안 보냄")
+            return
+        }
+        val eventPart = "오늘 ${best.event.name} 영향으로 "
 
         Log.d("PLEOS_TEST", "배터리=$soc%, 에어컨=$acOn, 남은거리=${"%.1f".format(remainKm)}km, 소요=${remainMin}분, 정체=${jamMin}분, 행사=${best?.event?.name ?: "없음"}, 도착시=${"%.1f".format(r.arrivePercent)}%")
 
@@ -239,16 +287,85 @@ class MainActivity : AppCompatActivity() {
         val text: String
         if (r.isShort) {
             title = "배터리가 부족할 수 있어요"
-            text = "도착 시 배터리 ${"%.0f".format(r.arrivePercent)}% · $destName 까지 ${remainMin}분\n" +
+            text = "도착 시 배터리 ${"%.0f".format(r.arrivePercent)}% · ${destName}까지 ${remainMin}분\n" +
                     "${eventPart}약 ${jamMin}분 정체 예상"
         } else {
-            title = "$destName 까지 ${remainMin}분"
+            title = "${destName}까지 ${remainMin}분"
             text = "${eventPart}약 ${jamMin}분 정체가 예상되지만, 도착해도 배터리 ${"%.0f".format(r.arrivePercent)}%로 충분해요."
         }
 
         if (AlertManager.shouldAlert(r.isShort, r.arrivePercent)) {
             runOnUiThread { showAlert(title, text, r.isShort) }
         }
+    }
+
+    // ⑤ 주행 중 상태 / ⑥ 정차 카드 중 하나만 보여줌
+    private fun render() {
+        val showCard = parked && !cardClosed
+        findViewById<View>(R.id.driveGroup).visibility = if (showCard) View.GONE else View.VISIBLE
+        findViewById<View>(R.id.parkGroup).visibility = if (showCard) View.VISIBLE else View.GONE
+
+        val event = shownEvent
+        val look = event?.let { typeLook(it.type) }
+
+        // ⑤ 주행 중: 문장 두 줄
+        val guiding = remainKm > 0.0
+        text(R.id.driveTitle, if (guiding) "${destName}까지 ${remainMin}분" else "내비에서 목적지를 설정해 주세요")
+        val jamMin = (jamHours * 60).toInt()
+        text(R.id.driveDetail, if (!guiding) "" else listOfNotNull(
+            arrivePercent?.let { "도착 시 배터리 ${"%.0f".format(it)}%" },
+            event?.let { "${it.name}로 약 ${jamMin}분 정체" }
+        ).joinToString("  ·  "))
+
+        // ⑥ 정차 카드
+        val hhmm = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+        text(R.id.eventType, look?.label ?: "")
+        look?.let { findViewById<TextView>(R.id.eventType).setTextColor(it.color) }
+        text(R.id.eventName, event?.name ?: "오늘 경로 근처에는 행사가 없어요")
+        text(R.id.eventTime, if (event == null || look == null) "" else {
+            val time = if (look.startOnly) "${event.start.format(hhmm)} ${look.timeLabel}"
+                       else "${event.start.format(hhmm)}–${event.end.format(hhmm)} ${look.timeLabel}"
+            "$time  ·  ${event.venue}"
+        })
+        text(R.id.eventCrowd, when (event?.crowd) {
+            "HIGH" -> "주변 혼잡 예상: 높음"; "MEDIUM" -> "주변 혼잡 예상: 보통"; "LOW" -> "주변 혼잡 예상: 낮음"; else -> ""
+        })
+        // 곡 제목이 비어 있으면 목록을 숨김 (음악 담당이 events.json을 채우면 보임)
+        val songs = event?.songs?.filter { it.title.isNotBlank() }?.sortedBy { it.priority }.orEmpty()
+        findViewById<View>(R.id.songsGroup).visibility = if (songs.isEmpty()) View.GONE else View.VISIBLE
+        text(R.id.songsTitle, look?.songsTitle ?: "")
+        text(R.id.eventSongs, songs.joinToString("\n") { "${it.title}  —  ${it.artist}" })
+        findViewById<TextView>(R.id.btnPlaylist).text = look?.button ?: ""
+        findViewById<View>(R.id.btnPlaylist).visibility = if (event == null) View.GONE else View.VISIBLE
+    }
+
+    // 행사 종류별 표시 (events.json의 type)
+    private data class TypeLook(
+        val label: String, val color: Int,
+        val timeLabel: String, val startOnly: Boolean,   // 시작 시각만 보여줄지
+        val songsTitle: String, val button: String
+    )
+
+    private fun typeLook(type: String) = when (type) {
+        // 밝은 배경에서 읽히도록 진한 색
+        "CONCERT" -> TypeLook("공연", 0xFFB4436C.toInt(), "시작", true, "아티스트 대표곡", "대표곡 듣기")
+        "BASEBALL" -> TypeLook("프로야구", 0xFF2E7D4F.toInt(), "경기 시작", true, "응원가", "응원가 듣기")
+        "FESTIVAL" -> TypeLook("축제", 0xFFB26A00.toInt(), "운영", false, "축제 음악", "축제 음악 듣기")
+        "EXPO" -> TypeLook("박람회", 0xFF1F6FA8.toInt(), "관람", false, "가는 길에 들을 음악", "음악 듣기")
+        else -> TypeLook("행사", 0xFFB26A00.toInt(), "", false, "추천 음악", "음악 듣기")
+    }
+
+    // 빈 글자면 칸 자체를 숨김
+    private fun text(id: Int, value: String) {
+        findViewById<TextView>(id).apply {
+            text = value
+            visibility = if (value.isBlank()) View.GONE else View.VISIBLE
+        }
+    }
+
+    // [플레이리스트 열기]: 음악 담당이 채울 자리 (기획서: 음원 플랫폼 연동)
+    private fun openPlaylist() {
+        Log.d("PLEOS_TEST", "플레이리스트 열기: ${shownEvent?.name}")
     }
 
     // ★ 헤드업 알림 띄우기 (내비 위에도 뜸)
@@ -290,6 +407,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         loopHandler.removeCallbacks(recheckLoop)
+        vehicle.getGear().unregisterGearSelection(gearListener)
         naviHelper.removeListener(naviListener)
         naviRef = null
         naviHelper.release()
