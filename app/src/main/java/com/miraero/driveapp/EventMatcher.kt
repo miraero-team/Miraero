@@ -35,6 +35,13 @@ object EventMatcher {
         val score: Int
     )
 
+    // 행사장 앞 통과까지 남은 분 = 행사장까지 거리 ÷ 평균 속도(남은 거리 ÷ 남은 시간). 계산 못 하면 null
+    // 직선거리 기준. 도로가 많이 돌아가면 일찍 울림 → 그땐 TBT·경로 offset으로 교체
+    fun minutesToPass(distKm: Double, remainKm: Double, remainMin: Int): Double? {
+        if (remainKm <= 0.0 || remainMin <= 0) return null
+        return distKm / (remainKm / remainMin)
+    }
+
     fun findMatches(
         events: List<EventCard>,
         curLat: Double, curLon: Double,
