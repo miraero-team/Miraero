@@ -47,7 +47,7 @@ class MainActivity : AppCompatActivity() {
         const val ACTION_CHARGE_YES = "com.miraero.driveapp.CHARGE_YES"
         const val ACTION_CHARGE_NO = "com.miraero.driveapp.CHARGE_NO"
         const val NOTI_ID = 1001
-        const val MUSIC_CHANNEL_ID = "stageroad_music"
+        const val MUSIC_CHANNEL_ID = "stageroad_music_v2"   // 채널 설정은 처음 만들 때 고정 → 바꾸면 이름도 바꿈
         const val ACTION_MUSIC_STOP = "com.miraero.driveapp.MUSIC_STOP"
         const val MUSIC_NOTI_ID = 1002
         // 통과 몇 분 전에 재생을 시작할지 = 곡 시작~하이라이트 길이. 시연하며 조정
@@ -258,7 +258,7 @@ class MainActivity : AppCompatActivity() {
         )
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel(MUSIC_CHANNEL_ID, "공연장 통과 음악", NotificationManager.IMPORTANCE_LOW)  // 헤드업 안 뜸
+            NotificationChannel(MUSIC_CHANNEL_ID, "공연장 통과 음악", NotificationManager.IMPORTANCE_DEFAULT)  // 헤드업은 HIGH만. DEFAULT는 목록에만 (LOW는 Pleos 알림 목록에서 숨겨짐)
         )
 
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -358,6 +358,7 @@ class MainActivity : AppCompatActivity() {
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle("곧 지나는 ${event.venue}에서 오늘 ${event.name}")
             .setContentText("${song.title} - ${song.artist}")
+            .setSilent(true)   // 음악이 나오는 중이라 알림음 없음
             .addAction(0, "멈춤", actionIntent(ACTION_MUSIC_STOP, 3))
             .build()
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
