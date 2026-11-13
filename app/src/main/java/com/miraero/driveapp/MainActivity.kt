@@ -171,8 +171,11 @@ class MainActivity : AppCompatActivity() {
 
             remainKm = destinationInfo.remainDistance / 1000.0
             remainMin = destinationInfo.remainTime / 60
-            destLat = destinationInfo.latitude
-            destLon = destinationInfo.longitude
+            // 경로 재계산 중엔 좌표가 0으로 옴 → 무시 (목적지까지 13,183km 계산 버그)
+            if (destinationInfo.latitude != 0.0) {
+                destLat = destinationInfo.latitude
+                destLon = destinationInfo.longitude
+            }
             Log.d("PLEOS_TEST", "목적지=$destName, 남은거리=${"%.1f".format(remainKm)}km, 남은시간=${remainMin}분")
             destReceived = true
             tryCheckEnergy()
@@ -278,6 +281,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun decide(soc: Int, acOn: Boolean) {
+        if (destLat == 0.0) return   // 목적지 좌표를 아직 모름
         val r = EnergyPlanner.check(soc, remainKm, jamHours, acOn)
         val jamMin = (jamHours * 60).toInt()
 
@@ -306,7 +310,7 @@ class MainActivity : AppCompatActivity() {
         if (r.isShort) {
             title = "배터리가 부족할 수 있어요"
             text = "도착 시 배터리 ${"%.0f".format(r.arrivePercent)}% · ${destName}까지 ${remainMin}분\n" +
-                    "${eventPart}약 ${jamMin}분 정체 예상"
+                    "${eventPart}약 ${jamMin}분 정체 예상. 충전소에 들를까요?"
         } else {
             title = "${destName}까지 ${remainMin}분"
             text = "${eventPart}약 ${jamMin}분 정체가 예상되지만, 도착해도 배터리 ${"%.0f".format(r.arrivePercent)}%로 충분해요."
