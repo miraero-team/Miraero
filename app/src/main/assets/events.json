@@ -9,11 +9,26 @@
     "date": "today",
     "startTime": "10:00",
     "endTime": "18:00",
-    "nearbyRoads": ["영동대로", "남부순환로", "양재대로"],
+    "nearbyRoads": [
+      "영동대로",
+      "남부순환로",
+      "양재대로"
+    ],
     "crowd": "MEDIUM",
     "summary": "학여울역 SETEC에서 박람회가 열려요",
     "songs": [
-      { "priority": 4, "title": "", "artist": "", "reason": "행사 분위기 플레이리스트" }
+      {
+        "priority": 4,
+        "title": "Lovely Day",
+        "artist": "Bill Withers",
+        "reason": "가는 길에 들을 음악"
+      },
+      {
+        "priority": 4,
+        "title": "Viva La Vida",
+        "artist": "Coldplay",
+        "reason": "가는 길에 들을 음악"
+      }
     ]
   },
   {
@@ -26,12 +41,28 @@
     "date": "today",
     "startTime": "18:30",
     "endTime": "21:30",
-    "nearbyRoads": ["올림픽로", "백제고분로", "영동대로", "삼학사로", "도곡로"],
+    "nearbyRoads": [
+      "올림픽로",
+      "백제고분로",
+      "영동대로",
+      "삼학사로",
+      "도곡로"
+    ],
     "crowd": "HIGH",
     "summary": "잠실에서 프로야구 경기가 열려요",
     "songs": [
-      { "priority": 3, "title": "", "artist": "", "reason": "홈팀 응원가" },
-      { "priority": 4, "title": "", "artist": "", "reason": "응원 분위기 플레이리스트" }
+      {
+        "priority": 3,
+        "title": "Take Me Out to the Ball Game",
+        "artist": "Traditional",
+        "reason": "야구장 응원가"
+      },
+      {
+        "priority": 4,
+        "title": "We Will Rock You",
+        "artist": "Queen",
+        "reason": "응원 분위기"
+      }
     ]
   },
   {
@@ -40,15 +71,31 @@
     "type": "CONCERT",
     "venue": "KSPO DOME (올림픽공원)",
     "lat": 37.5193,
-    "lon": 127.1270,
+    "lon": 127.127,
     "date": "today",
     "startTime": "19:00",
     "endTime": "21:30",
-    "nearbyRoads": ["양재대로", "강동대로", "위례성대로", "올림픽로"],
+    "nearbyRoads": [
+      "양재대로",
+      "강동대로",
+      "위례성대로",
+      "올림픽로"
+    ],
     "crowd": "HIGH",
     "summary": "올림픽공원 KSPO DOME에서 콘서트가 열려요",
     "songs": [
-      { "priority": 1, "title": "", "artist": "", "reason": "오늘 공연 아티스트 대표곡" }
+      {
+        "priority": 1,
+        "title": "좋은 날",
+        "artist": "아이유",
+        "reason": "오늘 공연 아티스트 대표곡"
+      },
+      {
+        "priority": 1,
+        "title": "밤편지",
+        "artist": "아이유",
+        "reason": "오늘 공연 아티스트 대표곡"
+      }
     ]
   },
   {
@@ -61,11 +108,25 @@
     "date": "today",
     "startTime": "11:00",
     "endTime": "21:00",
-    "nearbyRoads": ["구미중앙로", "역전로"],
+    "nearbyRoads": [
+      "구미중앙로",
+      "역전로"
+    ],
     "crowd": "HIGH",
     "summary": "구미역 일원에서 라면축제가 열려요",
     "songs": [
-      { "priority": 4, "title": "", "artist": "", "reason": "축제 분위기 플레이리스트" }
+      {
+        "priority": 4,
+        "title": "강남스타일",
+        "artist": "PSY",
+        "reason": "축제 분위기"
+      },
+      {
+        "priority": 4,
+        "title": "Dynamite",
+        "artist": "방탄소년단",
+        "reason": "축제 분위기"
+      }
     ]
   }
 ]

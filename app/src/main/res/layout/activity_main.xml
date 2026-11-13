@@ -1,10 +1,151 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- ⑤ 주행 중 상태 / ⑥ 정차 카드: 기어에 따라 하나만 보임 -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".MainActivity">
+    android:background="@color/stage_bg">
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+    <!-- ⑤ 주행 중: 버튼 없음 (주행 중 원칙) -->
+    <LinearLayout
+        android:id="@+id/driveGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:layout_marginStart="96dp"
+        android:layout_marginEnd="96dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/driveTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/stage_text"
+            android:textSize="64sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/driveDetail"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:textColor="@color/stage_text"
+            android:textSize="32sp" />
+
+        <TextView
+            android:id="@+id/driveHint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="64dp"
+            android:text="기어를 P에 두면 행사 정보를 볼 수 있어요"
+            android:textColor="@color/stage_muted"
+            android:textSize="24sp" />
+    </LinearLayout>
+
+    <!-- ⑥ 정차·도착 카드 -->
+    <LinearLayout
+        android:id="@+id/parkGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:layout_margin="64dp"
+        android:background="@drawable/bg_card"
+        android:orientation="vertical"
+        android:padding="56dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/eventType"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="26sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/eventName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:textColor="@color/stage_text"
+            android:textSize="56sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/eventTime"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:textColor="@color/stage_text"
+            android:textSize="30sp" />
+
+        <TextView
+            android:id="@+id/eventCrowd"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="@color/stage_muted"
+            android:textSize="26sp" />
+
+        <!-- 곡 제목이 채워진 경우에만 보임 -->
+        <LinearLayout
+            android:id="@+id/songsGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="36dp"
+            android:orientation="vertical">
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginBottom="28dp"
+                android:background="@color/stage_line" />
+
+            <TextView
+                android:id="@+id/songsTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:textColor="@color/stage_muted"
+                android:textSize="24sp" />
+
+            <TextView
+                android:id="@+id/eventSongs"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:lineSpacingExtra="12dp"
+                android:textColor="@color/stage_text"
+                android:textSize="30sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="48dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnPlaylist"
+                android:layout_width="0dp"
+                android:layout_height="112dp"
+                android:layout_weight="2"
+                android:backgroundTint="@color/stage_accent"
+                android:textColor="@color/stage_on_accent"
+                android:textSize="30sp"
+                android:textStyle="bold"
+                app:cornerRadius="16dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnClose"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="0dp"
+                android:layout_height="112dp"
+                android:layout_marginStart="24dp"
+                android:layout_weight="1"
+                android:text="닫기"
+                android:textColor="@color/stage_text"
+                android:textSize="30sp"
+                app:cornerRadius="16dp"
+                app:strokeColor="@color/stage_line" />
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

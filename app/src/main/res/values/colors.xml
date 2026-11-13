@@ -7,4 +7,13 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- 차량 화면: 밝은 단색 배경 (Pleos 시스템 화면과 같은 톤), 주 버튼은 Pleos 내비처럼 검정 -->
+    <color name="stage_bg">#FFF4F4F1</color>
+    <color name="stage_card">#FFFFFFFF</color>
+    <color name="stage_line">#FFE2E1DC</color>
+    <color name="stage_accent">#FF161614</color>
+    <color name="stage_on_accent">#FFFFFFFF</color>
+    <color name="stage_text">#FF161614</color>
+    <color name="stage_muted">#FF6B6962</color>
 </resources>
