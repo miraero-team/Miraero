@@ -18,6 +18,11 @@ class ChargeActionReceiver : BroadcastReceiver() {
                 Log.d("PLEOS_TEST", "알림: 그냥 가기 선택")
                 AlertManager.onDismissed()
             }
+            MainActivity.ACTION_MUSIC_STOP -> {
+                MusicPlayer.stop()
+                NotificationManagerCompat.from(context).cancel(MainActivity.MUSIC_NOTI_ID)
+                return
+            }
         }
         NotificationManagerCompat.from(context).cancel(MainActivity.NOTI_ID)
     }

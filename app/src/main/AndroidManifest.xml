@@ -21,6 +21,10 @@
             android:exported="true"
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize">
+            <!-- 주행 중에도 화면 표시 허용: 주행 중엔 한 문장만, 버튼·목록은 기어 P에서만 보여줌 -->
+            <meta-data
+                android:name="distractionOptimized"
+                android:value="true" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
