@@ -338,7 +338,7 @@ class MainActivity : AppCompatActivity() {
         val song = event.songs.filter { it.title.isNotBlank() }.minByOrNull { it.priority } ?: return
         playedEventId = event.id
         MusicPlayer.play(this, song)
-        runOnUiThread { showMusicNotice(event, song) }
+        runOnUiThread { showMusicNotice(event, song); render() }
     }
 
     // 시연용: 에뮬레이터 내비는 위치가 움직이지 않아 통과 장면을 명령으로 일으킴. 화면은 안 바뀜
@@ -383,6 +383,7 @@ class MainActivity : AppCompatActivity() {
             arrivePercent?.let { "도착 시 배터리 ${"%.0f".format(it)}%" },
             event?.let { "${it.name}로 약 ${jamMin}분 정체" }
         ).joinToString("  ·  "))
+        text(R.id.driveNowPlaying, MusicPlayer.nowPlaying?.let { "지금 재생  ${it.title} — ${it.artist}" } ?: "")
 
         // ⑥ 정차 카드
         val hhmm = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
