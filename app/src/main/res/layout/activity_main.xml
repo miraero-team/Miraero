@@ -33,6 +33,16 @@
             android:textColor="@color/stage_text"
             android:textSize="32sp" />
 
+        <!-- 공연장 통과 음악이 나올 때만 보임 -->
+        <TextView
+            android:id="@+id/driveNowPlaying"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="40dp"
+            android:textColor="@color/stage_text"
+            android:textSize="30sp"
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/driveHint"
             android:layout_width="wrap_content"

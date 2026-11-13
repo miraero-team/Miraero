@@ -13,7 +13,9 @@ import ai.pleos.playground.vehicle.Vehicle
 import ai.pleos.playground.vehicle.api.model.area.SeatArea
 import ai.pleos.playground.vehicle.constant.area.SeatValue
 import ai.pleos.playground.vehicle.constant.control.VehicleGear
+import ai.pleos.playground.vehicle.listener.EvBatteryStateOfChargeListener
 import ai.pleos.playground.vehicle.listener.GearSelectionListener
+import ai.pleos.playground.vehicle.listener.HvacAcStateListener
 import android.view.View
 import android.widget.TextView
 import android.Manifest
@@ -45,6 +47,11 @@ class MainActivity : AppCompatActivity() {
         const val ACTION_CHARGE_YES = "com.miraero.driveapp.CHARGE_YES"
         const val ACTION_CHARGE_NO = "com.miraero.driveapp.CHARGE_NO"
         const val NOTI_ID = 1001
+        const val MUSIC_CHANNEL_ID = "stageroad_music_v2"   // 채널 설정은 처음 만들 때 고정 → 바꾸면 이름도 바꿈
+        const val ACTION_MUSIC_STOP = "com.miraero.driveapp.MUSIC_STOP"
+        const val MUSIC_NOTI_ID = 1002
+        // 통과 몇 분 전에 재생을 시작할지 = 곡 시작~하이라이트 길이. 시연하며 조정
+        const val HIGHLIGHT_LEAD_MIN = 1.0
 
         var naviRef: NaviHelper? = null
 
@@ -100,13 +107,28 @@ class MainActivity : AppCompatActivity() {
             Log.e("PLEOS_TEST", "기어 실패: ${e.message}")
         }
     }
-    // 20초마다 다시 판단
-    private val loopHandler = android.os.Handler(android.os.Looper.getMainLooper())
-    private val recheckLoop = object : Runnable {
-        override fun run() {
+    // 배터리·에어컨: 바뀔 때마다 차가 알려줌 (20초 반복 대신)
+    private var soc: Int? = null
+    private var acOn = false
+    private val hvacAllSeats = SeatArea(   // 이 에뮬레이터는 공조를 차 전체 한 구역으로 관리
+        SeatValue.ROW_1_LEFT, SeatValue.ROW_1_RIGHT,
+        SeatValue.ROW_2_LEFT, SeatValue.ROW_2_CENTER, SeatValue.ROW_2_RIGHT
+    )
+    private val socListener = object : EvBatteryStateOfChargeListener {
+        override fun onEvBatteryStateOfChargeUpdated(value: Int?) {
+            if (value == null || value == soc) return
+            soc = value
             tryCheckEnergy()
-            loopHandler.postDelayed(this, 20_000)
         }
+        override fun onFailed(e: Exception) { Log.e("PLEOS_TEST", "배터리 실패: ${e.message}") }
+    }
+    private val acListener = object : HvacAcStateListener {
+        override fun onHvacAcStateUpdated(value: Boolean?) {
+            if ((value == true) == acOn) return
+            acOn = value == true
+            tryCheckEnergy()
+        }
+        override fun onFailed(e: Exception) { Log.e("PLEOS_TEST", "에어컨 실패: ${e.message}") }
     }
 
     private val naviListener = object : NaviHelperEventListener {
@@ -116,6 +138,7 @@ class MainActivity : AppCompatActivity() {
             curLat = currentLocationInfo.latitude
             curLon = currentLocationInfo.longitude
             Log.d("PLEOS_TEST", "현재 위치 = ${currentLocationInfo.latitude}, ${currentLocationInfo.longitude} (${currentLocationInfo.address})")
+            tryCheckEnergy()   // 위치가 바뀌면 행사장 통과 시각도 다시 계산
         }
 
         // 경로 상태 → 정체 시간 (경로가 바뀌면 내비가 자동으로 다시 보내줌)
@@ -172,7 +195,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         events = EventRepository.load(this)
-        // ponytail: 화면 확인·촬영용. adb shell am start -S -n com.miraero.driveapp/.MainActivity --es demoEvent kspo_concert
+        // 화면 확인·촬영용. adb shell am start -S -n com.miraero.driveapp/.MainActivity --es demoEvent kspo_concert
         demoEvent = events.firstOrNull { it.id == intent.getStringExtra("demoEvent") }
         shownEvent = demoEvent
         Log.d("PLEOS_TEST", "행사 카드 ${events.size}장 로드")
@@ -183,6 +206,22 @@ class MainActivity : AppCompatActivity() {
         vehicle = Vehicle(this)
         vehicle.initialize()
         vehicle.getGear().registerGearSelection(gearListener)
+        if (isDebuggable) androidx.core.content.ContextCompat.registerReceiver(
+            this, demoPassReceiver, android.content.IntentFilter("com.miraero.driveapp.DEMO_PASS"),
+            androidx.core.content.ContextCompat.RECEIVER_EXPORTED
+        )
+        vehicle.getEvBattery().registerEvBatteryStateOfCharge(socListener)
+        vehicle.getHVAC().registerHvacAcState(hvacAllSeats, acListener)
+        // 등록 직후 첫 값은 한 번 직접 읽어 둠
+        vehicle.getEvBattery().getEvBatteryStateOfCharge(
+            onComplete = { socListener.onEvBatteryStateOfChargeUpdated(it) },
+            onFailed = { socListener.onFailed(it) }
+        )
+        vehicle.getHVAC().getHvacAcState(
+            area = hvacAllSeats,
+            onComplete = { acListener.onHvacAcStateUpdated(it) },
+            onFailed = { acListener.onFailed(it) }
+        )
 
         findViewById<View>(R.id.btnPlaylist).setOnClickListener { openPlaylist() }
         findViewById<View>(R.id.btnClose).setOnClickListener {
@@ -205,7 +244,6 @@ class MainActivity : AppCompatActivity() {
             },
             { e -> Log.e("PLEOS_TEST", "내비 연결 실패: ${e.message}") }
         )
-        loopHandler.postDelayed(recheckLoop, 20_000)
     }
 
 
@@ -216,6 +254,9 @@ class MainActivity : AppCompatActivity() {
             CHANNEL_ID, "스테이지로드 안내", NotificationManager.IMPORTANCE_HIGH  // HIGH = 헤드업
         )
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        getSystemService(NotificationManager::class.java).createNotificationChannel(
+            NotificationChannel(MUSIC_CHANNEL_ID, "공연장 통과 음악", NotificationManager.IMPORTANCE_DEFAULT)  // 헤드업은 HIGH만. DEFAULT는 목록에만 (LOW는 Pleos 알림 목록에서 숨겨짐)
+        )
 
         if (Build.VERSION.SDK_INT >= 33 &&
             ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
@@ -232,32 +273,8 @@ class MainActivity : AppCompatActivity() {
             Log.d("PLEOS_TEST", "안내 중인 경로 없음 → 대기")
             return
         }
-        checkEnergy()
-    }
-
-    private fun checkEnergy() {
-        vehicle.getEvBattery().getEvBatteryStateOfCharge(
-            onComplete = { soc ->
-                val socValue = soc ?: return@getEvBatteryStateOfCharge
-                readAcAndDecide(socValue)
-            },
-            onFailed = { e -> Log.e("PLEOS_TEST", "배터리 실패: ${e.message}") }
-        )
-    }
-
-    private fun readAcAndDecide(soc: Int) {
-        val hvacAllSeats = SeatArea(
-            SeatValue.ROW_1_LEFT, SeatValue.ROW_1_RIGHT,
-            SeatValue.ROW_2_LEFT, SeatValue.ROW_2_CENTER, SeatValue.ROW_2_RIGHT
-        )
-        vehicle.getHVAC().getHvacAcState(
-            area = hvacAllSeats,
-            onComplete = { ac -> decide(soc, ac == true) },
-            onFailed = { e ->
-                Log.e("PLEOS_TEST", "에어컨 실패: ${e.message}")
-                decide(soc, false)
-            }
-        )
+        val s = soc ?: return   // 배터리 값을 아직 모름
+        decide(s, acOn)
     }
 
     private fun decide(soc: Int, acOn: Boolean) {
@@ -275,6 +292,7 @@ class MainActivity : AppCompatActivity() {
         shownEvent = demoEvent ?: best?.event
         arrivePercent = r.arrivePercent
         runOnUiThread { render() }
+        checkPassing(matches)
         if (best == null) {
             Log.d("PLEOS_TEST", "경로에 걸린 행사 없음 → 알림 안 보냄")
             return
@@ -299,6 +317,51 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // 메인2: 행사장 앞 통과 직전에 곡 재생 + 일반 알림(헤드업 아님: 음악은 운전과 무관)
+    private var playedEventId: String? = null
+
+    private fun checkPassing(matches: List<EventMatcher.Match>) {
+        val m = matches.filter { it.event.songs.any { s -> s.title.isNotBlank() } }
+            .minByOrNull { it.distToNowKm } ?: return
+        val min = EventMatcher.minutesToPass(m.distToNowKm, remainKm, remainMin) ?: return
+        Log.d("PLEOS_TEST", "${m.event.venue} 통과까지 ${"%.1f".format(min)}분")
+        if (min > HIGHLIGHT_LEAD_MIN || m.event.id == playedEventId) return
+
+        passVenue(m.event)
+    }
+
+    private fun passVenue(event: EventCard) {
+        val song = event.songs.filter { it.title.isNotBlank() }.minByOrNull { it.priority } ?: return
+        playedEventId = event.id
+        MusicPlayer.play(this, song)
+        runOnUiThread { showMusicNotice(event, song); render() }
+    }
+
+    // 시연용: 에뮬레이터 내비는 위치가 움직이지 않아 통과 장면을 명령으로 일으킴. 화면은 안 바뀜
+    // adb shell am broadcast -a com.miraero.driveapp.DEMO_PASS --es id setec_expo
+    // 디버그 빌드에서만 등록 (출시본에선 다른 앱이 보낼 수 없게)
+    private val demoPassReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: Intent) {
+            val event = events.firstOrNull { it.id == intent.getStringExtra("id") } ?: return
+            Log.d("PLEOS_TEST", "[시연] ${event.venue} 통과")
+            passVenue(event)
+        }
+    }
+    private val isDebuggable get() = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+
+    private fun showMusicNotice(event: EventCard, song: Song) {
+        val notice = NotificationCompat.Builder(this, MUSIC_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentTitle("곧 지나는 ${event.venue}에서 오늘 ${event.name}")
+            .setContentText("${song.title} - ${song.artist}")
+            .setSilent(true)   // 음악이 나오는 중이라 알림음 없음
+            .addAction(0, "멈춤", actionIntent(ACTION_MUSIC_STOP, 3))
+            .build()
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            == PackageManager.PERMISSION_GRANTED
+        ) NotificationManagerCompat.from(this).notify(MUSIC_NOTI_ID, notice)
+    }
+
     // ⑤ 주행 중 상태 / ⑥ 정차 카드 중 하나만 보여줌
     private fun render() {
         val showCard = parked && !cardClosed
@@ -316,6 +379,7 @@ class MainActivity : AppCompatActivity() {
             arrivePercent?.let { "도착 시 배터리 ${"%.0f".format(it)}%" },
             event?.let { "${it.name}로 약 ${jamMin}분 정체" }
         ).joinToString("  ·  "))
+        text(R.id.driveNowPlaying, MusicPlayer.nowPlaying?.let { "지금 재생  ${it.title} — ${it.artist}" } ?: "")
 
         // ⑥ 정차 카드
         val hhmm = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
@@ -365,7 +429,8 @@ class MainActivity : AppCompatActivity() {
 
     // [플레이리스트 열기]: 음악 담당이 채울 자리 (기획서: 음원 플랫폼 연동)
     private fun openPlaylist() {
-        Log.d("PLEOS_TEST", "플레이리스트 열기: ${shownEvent?.name}")
+        val song = shownEvent?.songs?.filter { it.title.isNotBlank() }?.minByOrNull { it.priority } ?: return
+        MusicPlayer.play(this, song)
     }
 
     // ★ 헤드업 알림 띄우기 (내비 위에도 뜸)
@@ -406,8 +471,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        loopHandler.removeCallbacks(recheckLoop)
+        vehicle.getEvBattery().unregisterEvBatteryStateOfCharge(socListener)
+        vehicle.getHVAC().unregisterHvacAcState(hvacAllSeats, acListener)
         vehicle.getGear().unregisterGearSelection(gearListener)
+        if (isDebuggable) unregisterReceiver(demoPassReceiver)
         naviHelper.removeListener(naviListener)
         naviRef = null
         naviHelper.release()
