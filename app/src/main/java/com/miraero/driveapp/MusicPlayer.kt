@@ -14,6 +14,8 @@ object MusicPlayer {
         private set
     var loadingSong: Song? = null
         private set
+    var errorMessage: String? = null
+        private set
 
     private var player: MediaPlayer? = null
     private var focus: AudioFocusRequest? = null
@@ -47,7 +49,7 @@ object MusicPlayer {
             Log.d("PLEOS_TEST", "[음악] ${song.title}: 클립 없음 → 재생 안 함")
             return
         }
-        // 15초만 잠깐 빌림(TRANSIENT): 라디오 같은 다른 음악은 멈췄다가 끝나면 이어짐.
+        // 클립·미리듣기 동안 잠깐 빌림: 라디오 같은 다른 음악은 멈췄다가 끝나면 이어짐.
         // 내비 음성이 끼어들면 시스템이 이 소리를 알아서 줄여 줌 (Android 8+ 자동 더킹)
         lateinit var req: AudioFocusRequest
         req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
@@ -64,6 +66,8 @@ object MusicPlayer {
         val am = app.getSystemService(AudioManager::class.java).also { this.am = it }
         if (am.requestAudioFocus(req) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
             Log.d("PLEOS_TEST", "[음악] 오디오 포커스 거절 → 재생 안 함")
+            am.abandonAudioFocusRequest(req)
+            fail("오디오 사용 권한을 받지 못했어요. 잠시 후 다시 선택해 주세요")
             return
         }
         focus = req
@@ -71,8 +75,12 @@ object MusicPlayer {
             val media = if (remote) MediaPlayer() else
                 MediaPlayer.create(app, resId, attrs, am.generateAudioSessionId()) ?: error("음원 파일을 열 수 없음")
             player = media
-            media.setOnCompletionListener { if (player === media) play(app, songs, index + 1) }
-            media.setOnErrorListener { _, _, _ -> if (player === media) stop(); true }
+            media.setOnCompletionListener {
+                if (player === media) {
+                    if (remote) stop() else play(app, songs, index + 1)
+                }
+            }
+            media.setOnErrorListener { _, _, _ -> if (player === media) fail(); true }
             fun start() {
                 if (player !== media) return
                 try {
@@ -83,7 +91,7 @@ object MusicPlayer {
                     onChange?.invoke()
                 } catch (e: Exception) {
                     Log.w("PLEOS_TEST", "[음악] 재생 시작 실패: ${e.javaClass.simpleName}")
-                    stop()
+                    fail()
                 }
             }
             if (remote) {
@@ -96,18 +104,26 @@ object MusicPlayer {
             } else start()
         } catch (e: Exception) {
             Log.w("PLEOS_TEST", "[음악] 재생 실패: ${e.javaClass.simpleName}")
-            stop()
+            fail()
         }
     }
 
+    private fun fail(message: String = "음원을 재생하지 못했어요. 다시 선택해 주세요") {
+        stop()
+        errorMessage = message
+        onChange?.invoke()
+    }
+
     fun stop() {
+        val hadError = errorMessage != null
+        errorMessage = null
         val previousPlayer = player
         player = null
         previousPlayer?.release()
         val previousFocus = focus
         focus = null
         previousFocus?.let { am?.abandonAudioFocusRequest(it) }
-        if (nowPlaying == null && loadingSong == null) return
+        if (nowPlaying == null && loadingSong == null && !hadError) return
         Log.d("PLEOS_TEST", "[음악] 멈춤: ${nowPlaying?.title ?: loadingSong?.title}")
         nowPlaying = null
         loadingSong = null
