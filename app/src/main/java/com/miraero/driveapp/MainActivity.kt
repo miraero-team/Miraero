@@ -56,18 +56,20 @@ class MainActivity : AppCompatActivity() {
         var naviRef: NaviHelper? = null
 
         fun addChargerWaypoint() {
-            // 시연용: 성남시청 충전소 / 실서비스: 충전소 공공 API로 경로 근처 + 행사장에서 먼 충전소
-            naviRef?.addWaypoint(
-                RequestWaypointInfo(
-                    latitude = 37.4200,
-                    longitude = 127.1267,
-                    poiName = "성남시청 전기차 충전소",
-                    address = "경기 성남시 중원구 성남대로 997",
-                    poiId = "",
-                    poiSubId = "",
-                    waypointIndex = WaypointIndex.FIRST
+            // 충전소는 DataHub가 골라줌 (API 있으면 실데이터, 없으면 성남시청 샘플)
+            DataHub.findCharger { c ->
+                naviRef?.addWaypoint(
+                    RequestWaypointInfo(
+                        latitude = c.lat,
+                        longitude = c.lon,
+                        poiName = c.name,
+                        address = c.address,
+                        poiId = "",
+                        poiSubId = "",
+                        waypointIndex = WaypointIndex.FIRST
+                    )
                 )
-            )
+            }
         }
     }
 
@@ -137,6 +139,8 @@ class MainActivity : AppCompatActivity() {
             super.onCurrentLocationInfo(currentLocationInfo)
             curLat = currentLocationInfo.latitude
             curLon = currentLocationInfo.longitude
+            DataHub.lastLat = curLat
+            DataHub.lastLon = curLon
             Log.d("PLEOS_TEST", "현재 위치 = ${currentLocationInfo.latitude}, ${currentLocationInfo.longitude} (${currentLocationInfo.address})")
             tryCheckEnergy()   // 위치가 바뀌면 행사장 통과 시각도 다시 계산
         }
@@ -197,11 +201,16 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        events = EventRepository.load(this)
-        // 화면 확인·촬영용. adb shell am start -S -n com.miraero.driveapp/.MainActivity --es demoEvent kspo_concert
-        demoEvent = events.firstOrNull { it.id == intent.getStringExtra("demoEvent") }
-        shownEvent = demoEvent
-        Log.d("PLEOS_TEST", "행사 카드 ${events.size}장 로드")
+        // 행사 카드: DataHub가 API → 실패하면 샘플 순서로 가져옴
+        DataHub.loadEvents(this) { list ->
+            events = list
+            // 화면 확인·촬영용. adb shell am start -S -n com.miraero.driveapp/.MainActivity --es demoEvent kspo_concert
+            demoEvent = events.firstOrNull { it.id == intent.getStringExtra("demoEvent") }
+            if (demoEvent != null) shownEvent = demoEvent
+            Log.d("PLEOS_TEST", "행사 카드 ${events.size}장 로드")
+            render()
+            tryCheckEnergy()
+        }
 
 
         setupNotification()   // ★ 알림 채널 + 권한
