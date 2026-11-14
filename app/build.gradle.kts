@@ -12,6 +12,7 @@ val localProps = Properties().apply {
 
 android {
     namespace = "com.miraero.driveapp"
+    useLibrary("android.car")   // 차 속도 (Pleos Vehicle SDK에 속도 API가 없음)
     compileSdk {
         version = release(37)
     }

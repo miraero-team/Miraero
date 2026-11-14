@@ -16,6 +16,7 @@
     ],
     "crowd": "MEDIUM",
     "summary": "학여울역 SETEC에서 박람회가 열려요",
+    "nextShow": "내일 10:00–18:00 · 같은 곳",
     "songs": [
       {
         "priority": 4,
@@ -52,6 +53,8 @@
     ],
     "crowd": "HIGH",
     "summary": "잠실에서 프로야구 경기가 열려요",
+    "liveScore": "7회말 3 : 2",
+    "nextShow": "내일 18:30 · 같은 구장",
     "songs": [
       {
         "priority": 3,
@@ -87,6 +90,7 @@
     ],
     "crowd": "HIGH",
     "summary": "올림픽공원 KSPO DOME에서 콘서트가 열려요",
+    "nextShow": "11월 21일(토) 19:00 · 같은 곳",
     "songs": [
       {
         "priority": 1,
@@ -120,6 +124,7 @@
     ],
     "crowd": "HIGH",
     "summary": "구미역 일원에서 라면축제가 열려요",
+    "nextShow": "내일 11:00–21:00 · 같은 곳",
     "songs": [
       {
         "priority": 4,

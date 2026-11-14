@@ -8,6 +8,8 @@
     <uses-permission android:name="pleos.car.permission.NAVI_ROUTE_SEARCH" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 시연 주행: 차 속도 (Android Car API, Virtual Console 속도) -->
+    <uses-permission android:name="android.car.permission.CAR_SPEED" />
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
