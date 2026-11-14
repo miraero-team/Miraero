@@ -30,7 +30,8 @@ data class EventCard(
     val summary: String,
     val songs: List<Song>,
     val liveScore: String? = null,   // 경기 중 스코어 한 줄 (시연: json 고정값 / 실서비스: 경기 데이터 API)
-    val nextShow: String? = null     // 도착 카드의 다음 공연·경기 일정
+    val nextShow: String? = null,    // 도착 카드의 다음 공연·경기 일정
+    val dateOnly: Boolean = false
 )
 
 // 행사 카드 꺼내오기 (지금: 앱 안 JSON / 나중: 서버에서 받기)

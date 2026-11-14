@@ -28,7 +28,10 @@ android {
 
         // 공공데이터포털 키 → 코드에서 BuildConfig.DATA_GO_KR_KEY 로 사용
         buildConfigField("String", "DATA_GO_KR_KEY", "\"${localProps.getProperty("DATA_GO_KR_KEY", "")}\"")
+        buildConfigField("String", "FESTIVAL_API_KEY", "\"${localProps.getProperty("FESTIVAL_API_KEY", "").replace("\\", "\\\\").replace("\"", "\\\"")}\"")
     }
+
+    buildFeatures { buildConfig = true }
 
     buildTypes {
         release {
@@ -37,10 +40,6 @@ android {
                 packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
             }
         }
-    }
-
-    buildFeatures {
-        buildConfig = true
     }
 
     compileOptions {
