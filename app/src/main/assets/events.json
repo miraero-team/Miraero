@@ -21,13 +21,15 @@
         "priority": 4,
         "title": "Lovely Day",
         "artist": "Bill Withers",
-        "reason": "가는 길에 들을 음악"
+        "reason": "가는 길에 들을 음악",
+        "clip": "setec_expo_1"
       },
       {
         "priority": 4,
         "title": "Viva La Vida",
         "artist": "Coldplay",
-        "reason": "가는 길에 들을 음악"
+        "reason": "가는 길에 들을 음악",
+        "clip": "setec_expo_2"
       }
     ]
   },
@@ -55,13 +57,15 @@
         "priority": 3,
         "title": "Take Me Out to the Ball Game",
         "artist": "Traditional",
-        "reason": "야구장 응원가"
+        "reason": "야구장 응원가",
+        "clip": "jamsil_baseball_1"
       },
       {
         "priority": 4,
         "title": "We Will Rock You",
         "artist": "Queen",
-        "reason": "응원 분위기"
+        "reason": "응원 분위기",
+        "clip": "jamsil_baseball_2"
       }
     ]
   },
@@ -88,13 +92,15 @@
         "priority": 1,
         "title": "좋은 날",
         "artist": "아이유",
-        "reason": "오늘 공연 아티스트 대표곡"
+        "reason": "오늘 공연 아티스트 대표곡",
+        "clip": "kspo_concert_1"
       },
       {
         "priority": 1,
         "title": "밤편지",
         "artist": "아이유",
-        "reason": "오늘 공연 아티스트 대표곡"
+        "reason": "오늘 공연 아티스트 대표곡",
+        "clip": "kspo_concert_2"
       }
     ]
   },
@@ -119,13 +125,15 @@
         "priority": 4,
         "title": "강남스타일",
         "artist": "PSY",
-        "reason": "축제 분위기"
+        "reason": "축제 분위기",
+        "clip": "gumi_ramen_1"
       },
       {
         "priority": 4,
         "title": "Dynamite",
         "artist": "방탄소년단",
-        "reason": "축제 분위기"
+        "reason": "축제 분위기",
+        "clip": "gumi_ramen_2"
       }
     ]
   }
