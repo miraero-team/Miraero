@@ -19,8 +19,7 @@ class ChargeActionReceiver : BroadcastReceiver() {
                 AlertManager.onDismissed()
             }
             MainActivity.ACTION_MUSIC_STOP -> {
-                MusicPlayer.stop()
-                NotificationManagerCompat.from(context).cancel(MainActivity.MUSIC_NOTI_ID)
+                MusicPlayer.stop()   // 알림 지우기·화면 갱신까지 MusicPlayer가 함
                 return
             }
         }

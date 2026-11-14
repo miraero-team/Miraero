@@ -239,6 +239,7 @@ class MainActivity : AppCompatActivity() {
             onFailed = { acListener.onFailed(it) }
         )
 
+        MusicPlayer.onChange = { runOnUiThread { render() } }
         findViewById<View>(R.id.btnPlaylist).setOnClickListener { openPlaylist() }
         findViewById<View>(R.id.btnClose).setOnClickListener {
             cardClosed = true
@@ -351,6 +352,7 @@ class MainActivity : AppCompatActivity() {
         val song = event.songs.filter { it.title.isNotBlank() }.minByOrNull { it.priority } ?: return
         playedEventId = event.id
         MusicPlayer.play(this, song)
+        if (MusicPlayer.nowPlaying == null) return   // 클립이 없거나 오디오 포커스를 못 받음
         runOnUiThread { showMusicNotice(event, song); render() }
     }
 
@@ -488,6 +490,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        MusicPlayer.onChange = null
         vehicle.getEvBattery().unregisterEvBatteryStateOfCharge(socListener)
         vehicle.getHVAC().unregisterHvacAcState(hvacAllSeats, acListener)
         vehicle.getGear().unregisterGearSelection(gearListener)

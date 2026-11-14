@@ -11,7 +11,8 @@ data class Song(
     val priority: Int,   // 1: 출연 아티스트 대표곡, 2: 행사·지역 테마곡, 3: 응원가, 4: 분위기 플레이리스트
     val title: String,
     val artist: String,
-    val reason: String
+    val reason: String,
+    val clip: String = ""   // res/raw 하이라이트 파일 이름 (확장자 빼고). 없으면 재생 안 함
 )
 
 // 행사 카드 한 장
@@ -53,7 +54,7 @@ object EventRepository {
             val songs = o.getJSONArray("songs").let { s ->
                 List(s.length()) {
                     val so = s.getJSONObject(it)
-                    Song(so.getInt("priority"), so.getString("title"), so.getString("artist"), so.getString("reason"))
+                    Song(so.getInt("priority"), so.getString("title"), so.getString("artist"), so.getString("reason"), so.optString("clip"))
                 }
             }
 
