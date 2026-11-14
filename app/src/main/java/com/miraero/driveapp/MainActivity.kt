@@ -27,7 +27,9 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
+import android.content.ActivityNotFoundException
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -43,6 +45,7 @@ import androidx.core.view.WindowInsetsCompat
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.concurrent.Executors
+import java.util.concurrent.Future
 
 class MainActivity : AppCompatActivity() {
 
@@ -126,8 +129,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var playlistRepository: PlaylistRepository
     private var playlistEventId: String? = null
     private var playlistSongs: List<Song> = emptyList()
+    private var selectedPreview: Song? = null
     private var playlistStatus = ""
     private var playlistRequest = 0
+    private var playlistFailed = false
+    private val playlistExecutor = Executors.newSingleThreadExecutor()
+    private var playlistFuture: Future<*>? = null
     private var demoEvent: EventCard? = null     // 확인용으로 고정한 행사
     private var arrivePercent: Double? = null    // 도착 배터리
     private var festivals: List<EventCard> = emptyList()
@@ -172,9 +179,12 @@ class MainActivity : AppCompatActivity() {
         override fun onSelected(gear: VehicleGear?) {
             Log.d("PLEOS_TEST", "기어 = $gear")
             val nowParked = gear == VehicleGear.GEAR_PARK
-            if (nowParked && !parked) cardClosed = false   // 새로 정차하면 카드 다시 보여줌
-            parked = nowParked
-            runOnUiThread { render() }
+            runOnUiThread {
+                if (nowParked && !parked) cardClosed = false
+                parked = nowParked
+                if (!parked) stopPreview()
+                render()
+            }
         }
         override fun onFailed(e: Exception) {
             Log.e("PLEOS_TEST", "기어 실패: ${e.message}")
@@ -327,7 +337,7 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        playlistRepository = LocalPlaylistRepository(EventRepository.load(this))
+        playlistRepository = ItunesPlaylistRepository(EventRepository.load(this))
         // 행사 카드: DataHub가 API → 실패하면 샘플 순서로 가져옴
         DataHub.loadEvents(this) { list ->
             events = list
@@ -382,6 +392,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.btnMusicStop).setOnClickListener { MusicPlayer.stop() }
         findViewById<View>(R.id.btnClose).setOnClickListener {
             cardClosed = true
+            stopPreview()
             render()
         }
         render()
@@ -501,7 +512,8 @@ class MainActivity : AppCompatActivity() {
             playedEventId = event.id
             showScore(event)
         }
-        val song = event.songs.filter { it.title.isNotBlank() }.minByOrNull { it.priority } ?: return
+        val song = event.songs.filter { it.title.isNotBlank() && it.clip.isNotBlank() }
+            .minByOrNull { it.priority }?.copy(previewUrl = "", storeUrl = "") ?: return
         playedEventId = event.id
         MusicPlayer.play(this, song)
         if (MusicPlayer.nowPlaying == null) return   // 클립이 없거나 오디오 포커스를 못 받음
@@ -574,7 +586,7 @@ class MainActivity : AppCompatActivity() {
                          else curAddress.ifBlank { "현재 위치(주소 확인 중)" }
         val nearby = EventMatcher.nearbyFestivals(festivals, lat, lon, today)
         val event = demoEvent ?: nearby.firstOrNull() ?: shownEvent
-        loadPlaylist(event)
+        if (showCard) loadPlaylist(event)
         val look = event?.let { typeLook(it.type) }
 
         // ⑤ 주행 중: 문장 두 줄
@@ -614,10 +626,12 @@ class MainActivity : AppCompatActivity() {
         // 곡 제목이 비어 있으면 목록을 숨김 (음악 담당이 events.json을 채우면 보임)
         val songs = playlistSongs
         findViewById<View>(R.id.songsGroup).visibility = if (songs.isEmpty() && playlistStatus.isBlank()) View.GONE else View.VISIBLE
-        text(R.id.songsTitle, if (event?.dateOnly == true) {
-            if (songs.any { it.previewUrl.isNotBlank() }) "축제 분위기 플레이리스트 · 미리듣기"
-            else "축제 분위기 플레이리스트 · 15초 미리듣기"
-        } else look?.songsTitle ?: "")
+        val remote = songs.any { it.storeUrl.isNotBlank() }
+        text(R.id.songsTitle, if (remote) {
+            if (event?.type == "CONCERT") "공연 아티스트 음악 · iTunes 미리듣기"
+            else "축제 분위기 음악 · 출연진 정보 아님"
+        } else if (event?.dateOnly == true) "축제 분위기 플레이리스트 · 15초 미리듣기"
+        else look?.songsTitle ?: "")
         text(R.id.playlistStatus, playlistStatus)
         val songList = findViewById<android.widget.LinearLayout>(R.id.eventSongs)
         songList.removeAllViews()
@@ -627,7 +641,7 @@ class MainActivity : AppCompatActivity() {
                     android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
                     android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
                 )
-                text = "${index + 1}. ${song.title} — ${song.artist}  ▶"
+                text = "${index + 1}. ${song.title} — ${song.artist}  ${if (song.previewUrl.isNotBlank()) "미리듣기" else "▶"}"
                 isAllCaps = false
                 maxLines = 1
                 ellipsize = android.text.TextUtils.TruncateAt.END
@@ -636,15 +650,31 @@ class MainActivity : AppCompatActivity() {
                 setTextColor(getColor(R.color.stage_on_accent))
                 minHeight = (64 * resources.displayMetrics.density).toInt()
                 gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
-                contentDescription = "${song.title}, ${song.artist}, 재생"
-                setOnClickListener { if (parked) MusicPlayer.play(this@MainActivity, songs, index) }
+                contentDescription = "${song.title}, ${song.artist}, ${if (song.previewUrl.isNotBlank()) "미리듣기" else "재생"}"
+                setOnClickListener {
+                    if (parked) {
+                        if (song.previewUrl.isNotBlank()) {
+                            selectedPreview = song
+                            MusicPlayer.play(this@MainActivity, song)
+                        }
+                        else MusicPlayer.play(this@MainActivity, songs, index)
+                    }
+                }
             })
         }
-        text(R.id.parkNowPlaying, MusicPlayer.loadingSong?.let { "음원 준비 중: ${it.title}" }
+        val storeSong = selectedPreview?.takeIf { it in songs && it.storeUrl.isNotBlank() }
+            ?: songs.firstOrNull { it.storeUrl.isNotBlank() }
+        findViewById<View>(R.id.itunesStoreGroup).visibility = if (storeSong == null) View.GONE else View.VISIBLE
+        text(R.id.itunesStoreTitle, storeSong?.let { "iTunes에서 보기: ${it.title} — ${it.artist}" }.orEmpty())
+        findViewById<View>(R.id.btnItunesStore).apply {
+            contentDescription = storeSong?.let { "${it.title}, ${it.artist}, iTunes 스토어 열기" }
+            setOnClickListener { storeSong?.let { openStore(it) } }
+        }
+        text(R.id.parkNowPlaying, MusicPlayer.errorMessage ?: MusicPlayer.loadingSong?.let { "음원 준비 중: ${it.title}" }
             ?: MusicPlayer.nowPlaying?.let { "재생 중: ${it.title} — ${it.artist}" }.orEmpty())
         findViewById<View>(R.id.btnMusicStop).visibility = if (MusicPlayer.nowPlaying == null && MusicPlayer.loadingSong == null) View.GONE else View.VISIBLE
-        findViewById<TextView>(R.id.btnPlaylist).text = "플레이리스트 재생"
-        findViewById<View>(R.id.btnPlaylist).visibility = if (songs.isEmpty()) View.GONE else View.VISIBLE
+        findViewById<TextView>(R.id.btnPlaylist).text = if (playlistFailed) "다시 불러오기" else "플레이리스트 재생"
+        findViewById<View>(R.id.btnPlaylist).visibility = if (playlistFailed || (songs.isNotEmpty() && !remote)) View.VISIBLE else View.GONE
         if (BuildConfig.DEBUG) {
             val state = "화면=${if (showCard) "정차 상세" else "주행 간단"}, 기준=$area, 검색위치=$searchName, 반경=2km, " +
                 "주변=${nearby.size}개, 표시=${event?.name ?: "없음"}, 실데이터=${event?.dateOnly == true}, 상태=$festivalStatus"
@@ -683,26 +713,45 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // [플레이리스트 열기]: 음악 담당이 채울 자리 (기획서: 음원 플랫폼 연동)
+    private fun openStore(song: Song) {
+        if (!parked || !ItunesPlaylistRepository.validStoreUrl(song.storeUrl)) return
+        MusicPlayer.stop()
+        try {
+            val uri = Uri.parse(song.storeUrl).buildUpon().appendQueryParameter("app", "itunes").build()
+            startActivity(Intent(Intent.ACTION_VIEW, uri))
+        } catch (_: ActivityNotFoundException) {
+            android.widget.Toast.makeText(this, "스토어를 열 수 있는 앱이 없어요", android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun openPlaylist() {
-        if (parked) MusicPlayer.play(this, playlistSongs)
+        if (!parked) return
+        if (playlistFailed) {
+            playlistEventId = null
+            render()
+        } else if (playlistSongs.none { it.previewUrl.isNotBlank() }) MusicPlayer.play(this, playlistSongs)
     }
 
     private fun loadPlaylist(event: EventCard?) {
-        if (isDestroyed || isFinishing || festivalExecutor.isShutdown) return
+        if (isDestroyed || isFinishing || playlistExecutor.isShutdown) return
         if (event?.id == playlistEventId || !::playlistRepository.isInitialized) return
         playlistEventId = event?.id
         val request = ++playlistRequest
+        playlistFuture?.cancel(true)
+        playlistFailed = false
         playlistSongs = emptyList()
+        selectedPreview = null
         playlistStatus = if (event == null) "" else "추천 음악을 불러오는 중이에요"
+        stopPreview()
         if (event == null) return
-        festivalExecutor.execute {
+        playlistFuture = playlistExecutor.submit {
             val result = runCatching { playlistRepository.recommend(event) }
             runOnUiThread {
                 if (isDestroyed || isFinishing || playlistRequest != request) return@runOnUiThread
                 playlistSongs = result.getOrDefault(emptyList())
+                playlistFailed = result.isFailure
                 playlistStatus = when {
-                    result.isFailure -> "추천 음악을 불러오지 못했어요"
+                    result.isFailure -> "추천 음악을 불러오지 못했어요. 다시 불러오기를 눌러 주세요"
                     playlistSongs.isEmpty() -> "이 행사에 추천할 음악이 아직 없어요"
                     else -> ""
                 }
@@ -748,7 +797,18 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    private fun stopPreview() {
+        if (MusicPlayer.errorMessage != null ||
+            listOfNotNull(MusicPlayer.nowPlaying, MusicPlayer.loadingSong).any { it.previewUrl.isNotBlank() }) MusicPlayer.stop()
+    }
+
+    override fun onStop() {
+        stopPreview()
+        super.onStop()
+    }
+
     override fun onDestroy() {
+        playlistExecutor.shutdownNow()
         festivalExecutor.shutdownNow()
         MusicPlayer.onChange = null
         retryHandler.removeCallbacks(retryDest)
