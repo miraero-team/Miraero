@@ -71,18 +71,20 @@ class MainActivity : AppCompatActivity() {
         var naviRef: NaviHelper? = null
 
         fun addChargerWaypoint() {
-            // 시연용: 성남시청 충전소 / 실서비스: 충전소 공공 API로 경로 근처 + 행사장에서 먼 충전소
-            naviRef?.addWaypoint(
-                RequestWaypointInfo(
-                    latitude = 37.4200,
-                    longitude = 127.1267,
-                    poiName = "성남시청 전기차 충전소",
-                    address = "경기 성남시 중원구 성남대로 997",
-                    poiId = "",
-                    poiSubId = "",
-                    waypointIndex = WaypointIndex.FIRST
+            // 충전소는 DataHub가 골라줌 (API 있으면 실데이터, 없으면 성남시청 샘플)
+            DataHub.findCharger { c ->
+                naviRef?.addWaypoint(
+                    RequestWaypointInfo(
+                        latitude = c.lat,
+                        longitude = c.lon,
+                        poiName = c.name,
+                        address = c.address,
+                        poiId = "",
+                        poiSubId = "",
+                        waypointIndex = WaypointIndex.FIRST
+                    )
                 )
-            )
+            }
         }
     }
 
@@ -102,6 +104,16 @@ class MainActivity : AppCompatActivity() {
 
     private var routeReceived = false
     private var destReceived = false
+    // 경로 재계산 중 남은거리 0이 오면 3초마다 다시 물어봄 (최대 10번)
+    private val retryHandler by lazy { Handler(mainLooper) }
+    private var destRetries = 0
+    private val retryDest = Runnable {
+        if (remainKm <= 0.0 && destRetries < 10) {
+            destRetries++
+            Log.d("PLEOS_TEST", "남은거리 0 → 목적지 다시 요청 ($destRetries)")
+            naviHelper.getDestinationInfo()
+        }
+    }
 
     // ===== 화면 상태 =====
     private var parked = false                   // 기어 P
@@ -194,6 +206,9 @@ class MainActivity : AppCompatActivity() {
             super.onCurrentLocationInfo(currentLocationInfo)
             curLat = currentLocationInfo.latitude
             curLon = currentLocationInfo.longitude
+            DataHub.lastLat = curLat
+            DataHub.lastLon = curLon
+            DataHub.warmUpChargers()
             Log.d("PLEOS_TEST", "현재 위치 = ${currentLocationInfo.latitude}, ${currentLocationInfo.longitude} (${currentLocationInfo.address})")
             tryCheckEnergy()   // 위치가 바뀌면 행사장 통과 시각도 다시 계산
         }
@@ -232,8 +247,13 @@ class MainActivity : AppCompatActivity() {
             if (destinationInfo.latitude != 0.0) {
                 destLat = destinationInfo.latitude
                 destLon = destinationInfo.longitude
+                DataHub.destLat = destLat
+                DataHub.destLon = destLon
             }
             Log.d("PLEOS_TEST", "목적지=$destName, 남은거리=${"%.1f".format(remainKm)}km, 남은시간=${remainMin}분")
+            // 0km면 3초 뒤 다시 요청, 제대로 오면 횟수 초기화
+            retryHandler.removeCallbacks(retryDest)
+            if (remainKm <= 0.0) retryHandler.postDelayed(retryDest, 3000) else destRetries = 0
             destReceived = true
             tryCheckEnergy()
         }
@@ -241,6 +261,12 @@ class MainActivity : AppCompatActivity() {
         override fun onTBTInfo(tbtInfoList: List<TBTInfo>) {
             super.onTBTInfo(tbtInfoList)
             Log.d("PLEOS_TEST", "다음 회전 = ${tbtInfoList.firstOrNull()}")
+            // 회전 안내가 다시 오면 경로가 살아난 것 → 목적지 다시 확인
+            if (remainKm <= 0.0 && tbtInfoList.isNotEmpty()) {
+                destRetries = 0
+                retryHandler.removeCallbacks(retryDest)
+                retryHandler.post(retryDest)
+            }
         }
     }
 
@@ -254,11 +280,17 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        events = EventRepository.load(this)
-        // 화면 확인·촬영용. adb shell am start -S -n com.miraero.driveapp/.MainActivity --es demoEvent kspo_concert
-        demoEvent = events.firstOrNull { it.id == intent.getStringExtra("demoEvent") }
-        shownEvent = demoEvent
-        Log.d("PLEOS_TEST", "행사 카드 ${events.size}장 로드")
+        // 행사 카드: DataHub가 API → 실패하면 샘플 순서로 가져옴
+        DataHub.loadEvents(this) { list ->
+            events = list
+            DataHub.chargerSource = EvChargerApiSource   // 충전소: 공공데이터 API (실패하면 샘플)
+            // 화면 확인·촬영용. adb shell am start -S -n com.miraero.driveapp/.MainActivity --es demoEvent kspo_concert
+            demoEvent = events.firstOrNull { it.id == intent.getStringExtra("demoEvent") }
+            if (demoEvent != null) shownEvent = demoEvent
+            Log.d("PLEOS_TEST", "행사 카드 ${events.size}장 로드")
+            render()
+            tryCheckEnergy()
+        }
 
 
         setupNotification()   // ★ 알림 채널 + 권한
@@ -588,6 +620,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         MusicPlayer.onChange = null
+        retryHandler.removeCallbacks(retryDest)
         demoDrive.stop()
         uiHandler.removeCallbacks(clearScore)
         carProps?.unregisterCallback(speedCallback)
