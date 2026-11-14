@@ -74,6 +74,7 @@
   },
   {
     "id": "kspo_concert",
+    "musicArtistIds": [409076743],
     "name": "KSPO DOME 콘서트",
     "type": "CONCERT",
     "venue": "KSPO DOME (올림픽공원)",
@@ -110,6 +111,7 @@
   },
   {
     "id": "gumi_ramen",
+    "musicArtistIds": [554290495, 883131348],
     "name": "구미라면축제",
     "type": "FESTIVAL",
     "venue": "구미역 일원",

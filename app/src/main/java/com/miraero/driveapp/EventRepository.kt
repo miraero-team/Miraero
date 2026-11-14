@@ -13,7 +13,8 @@ data class Song(
     val artist: String,
     val reason: String,
     val clip: String = "",  // res/raw 하이라이트 파일 이름 (확장자 빼고)
-    val previewUrl: String = "" // 외부 음악 제공자가 허용한 HTTPS 미리듣기 URL
+    val previewUrl: String = "", // 외부 음악 제공자가 허용한 HTTPS 미리듣기 URL
+    val storeUrl: String = ""
 )
 
 // 행사 카드 한 장
@@ -32,7 +33,8 @@ data class EventCard(
     val songs: List<Song>,
     val liveScore: String? = null,   // 경기 중 스코어 한 줄 (시연: json 고정값 / 실서비스: 경기 데이터 API)
     val nextShow: String? = null,    // 도착 카드의 다음 공연·경기 일정
-    val dateOnly: Boolean = false
+    val dateOnly: Boolean = false,
+    val musicArtistIds: List<Long> = emptyList() // iTunes 아티스트 ID, 축제 분위기용은 실제 출연진과 무관
 )
 
 // 행사 카드 꺼내오기 (지금: 앱 안 JSON / 나중: 서버에서 받기)
@@ -76,7 +78,10 @@ object EventRepository {
                 summary = o.getString("summary"),
                 songs = songs.sortedBy { it.priority },
                 liveScore = o.optString("liveScore").ifBlank { null },
-                nextShow = o.optString("nextShow").ifBlank { null }
+                nextShow = o.optString("nextShow").ifBlank { null },
+                musicArtistIds = o.optJSONArray("musicArtistIds")?.let { ids ->
+                    List(ids.length()) { ids.getLong(it) }
+                }.orEmpty()
             )
         }
         cache = list
