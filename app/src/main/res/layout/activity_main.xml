@@ -33,6 +33,27 @@
             android:textColor="@color/stage_text"
             android:textSize="32sp" />
 
+        <!-- 시연 주행 중: 행사장까지 남은 거리 -->
+        <TextView
+            android:id="@+id/driveDemo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="40dp"
+            android:textColor="@color/stage_text"
+            android:textSize="30sp"
+            android:visibility="gone" />
+
+        <!-- 경기장 앞을 지날 때: 진행 중인 경기 스코어 한 줄 (음악 대신) -->
+        <TextView
+            android:id="@+id/driveScore"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="40dp"
+            android:textColor="@color/stage_text"
+            android:textSize="30sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
         <!-- 공연장 통과 음악이 나올 때만 보임 -->
         <TextView
             android:id="@+id/driveNowPlaying"
@@ -96,6 +117,16 @@
             android:layout_marginTop="8dp"
             android:textColor="@color/stage_muted"
             android:textSize="26sp" />
+
+        <!-- 도착 카드: 다음 공연·경기 일정 -->
+        <TextView
+            android:id="@+id/eventNext"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="@color/stage_muted"
+            android:textSize="26sp"
+            android:visibility="gone" />
 
         <!-- 곡 제목이 채워진 경우에만 보임 -->
         <LinearLayout

@@ -16,6 +16,10 @@ import ai.pleos.playground.vehicle.constant.control.VehicleGear
 import ai.pleos.playground.vehicle.listener.EvBatteryStateOfChargeListener
 import ai.pleos.playground.vehicle.listener.GearSelectionListener
 import ai.pleos.playground.vehicle.listener.HvacAcStateListener
+import android.car.Car
+import android.car.VehiclePropertyIds
+import android.car.hardware.CarPropertyValue
+import android.car.hardware.property.CarPropertyManager
 import android.view.View
 import android.widget.TextView
 import android.Manifest
@@ -27,6 +31,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
@@ -50,8 +55,18 @@ class MainActivity : AppCompatActivity() {
         const val MUSIC_CHANNEL_ID = "stageroad_music_v2"   // 채널 설정은 처음 만들 때 고정 → 바꾸면 이름도 바꿈
         const val ACTION_MUSIC_STOP = "com.miraero.driveapp.MUSIC_STOP"
         const val MUSIC_NOTI_ID = 1002
-        // 통과 몇 분 전에 재생을 시작할지 = 곡 시작~하이라이트 길이. 시연하며 조정
-        const val HIGHLIGHT_LEAD_MIN = 1.0
+        // 통과 몇 분 전에 재생을 시작할지. 클립이 15초라 7.5초 전에 시작 → 하이라이트 가운데가 공연장 앞
+        const val CLIP_SEC = 15.0
+        const val HIGHLIGHT_LEAD_MIN = CLIP_SEC / 2 / 60   // 0.125분
+        const val SCORE_NOTI_ID = 1003
+
+        // 시연 주행 (디버그 빌드에서만). 에뮬레이터 내비 위치가 안 움직여서 차 속도로 남은 거리를 줄임
+        // adb shell am broadcast -a com.miraero.driveapp.DEMO_DRIVE --es id kspo_concert --ef km 1.2
+        //   (--ef kmh 50 을 붙이면 차량 속도 대신 고정 속도. 생략하면 Virtual Console 속도를 씀)
+        // adb shell am broadcast -a com.miraero.driveapp.DEMO_DRIVE_STOP
+        const val ACTION_DEMO_DRIVE = "com.miraero.driveapp.DEMO_DRIVE"
+        const val ACTION_DEMO_DRIVE_STOP = "com.miraero.driveapp.DEMO_DRIVE_STOP"
+        const val DEMO_DEFAULT_KM = 1.2
 
         var naviRef: NaviHelper? = null
 
@@ -129,6 +144,48 @@ class MainActivity : AppCompatActivity() {
             tryCheckEnergy()
         }
         override fun onFailed(e: Exception) { Log.e("PLEOS_TEST", "에어컨 실패: ${e.message}") }
+    }
+
+    // ===== 시연 주행 · 경기 스코어 =====
+    private val uiHandler = Handler(Looper.getMainLooper())
+    private var scoreLine: String? = null          // 경기장 앞을 지날 때 한 줄
+    private val clearScore = Runnable { scoreLine = null; render() }
+    private val demoDrive = DemoDrive(
+        leadMin = HIGHLIGHT_LEAD_MIN,
+        onChange = { runOnUiThread { render() } },
+        onPass = { passVenue(it) }
+    )
+
+    // 차 속도: Pleos Vehicle SDK에 속도 API가 없어서 Android Car API로 읽음 (Virtual Console 속도가 들어옴)
+    private var car: Car? = null
+    private var carProps: CarPropertyManager? = null
+    private val speedCallback = object : CarPropertyManager.CarPropertyEventCallback {
+        override fun onChangeEvent(value: CarPropertyValue<*>) {
+            val mps = (value.value as? Float) ?: return
+            val kmh = mps * 3.6
+            if ((demoDrive.carSpeedKmh ?: -1.0).toInt() != kmh.toInt()) Log.d("PLEOS_TEST", "차 속도 = ${kmh.toInt()}km/h")
+            demoDrive.carSpeedKmh = kmh
+        }
+        override fun onErrorEvent(propertyId: Int, zone: Int) {
+            Log.e("PLEOS_TEST", "차 속도 읽기 실패")
+        }
+    }
+
+    private fun startSpeed() {
+        if (carProps != null) return
+        if (checkSelfPermission(Car.PERMISSION_SPEED) != PackageManager.PERMISSION_GRANTED) {
+            Log.d("PLEOS_TEST", "차 속도 권한 없음 → 시연 주행은 --ef kmh 로 속도 지정")
+            return
+        }
+        try {
+            val c = Car.createCar(this) ?: return
+            val props = c.getCarManager(Car.PROPERTY_SERVICE) as CarPropertyManager
+            props.registerCallback(speedCallback, VehiclePropertyIds.PERF_VEHICLE_SPEED, CarPropertyManager.SENSOR_RATE_NORMAL)
+            car = c; carProps = props
+            Log.d("PLEOS_TEST", "차 속도 연결")
+        } catch (e: Throwable) {
+            Log.e("PLEOS_TEST", "차 속도 연결 실패: ${e.message}")
+        }
     }
 
     private val naviListener = object : NaviHelperEventListener {
@@ -210,7 +267,10 @@ class MainActivity : AppCompatActivity() {
         vehicle.initialize()
         vehicle.getGear().registerGearSelection(gearListener)
         if (isDebuggable) androidx.core.content.ContextCompat.registerReceiver(
-            this, demoPassReceiver, android.content.IntentFilter("com.miraero.driveapp.DEMO_PASS"),
+            this, demoPassReceiver,
+            android.content.IntentFilter("com.miraero.driveapp.DEMO_PASS").apply {
+                addAction(ACTION_DEMO_DRIVE); addAction(ACTION_DEMO_DRIVE_STOP)
+            },
             androidx.core.content.ContextCompat.RECEIVER_EXPORTED
         )
         vehicle.getEvBattery().registerEvBatteryStateOfCharge(socListener)
@@ -228,6 +288,13 @@ class MainActivity : AppCompatActivity() {
 
         MusicPlayer.onChange = { runOnUiThread { render() } }
         findViewById<View>(R.id.btnPlaylist).setOnClickListener { openPlaylist() }
+        // 시연: 주행 화면 제목을 길게 누르면 지금 경로의 행사(없으면 첫 행사)로 시연 주행 시작/중지 (디버그 빌드만)
+        if (isDebuggable) findViewById<View>(R.id.driveTitle).setOnLongClickListener {
+            if (demoDrive.running) demoDrive.stop()
+            else (shownEvent ?: events.firstOrNull())?.let { demoDrive.start(it, DEMO_DEFAULT_KM, null) }
+            true
+        }
+        startSpeed()
         findViewById<View>(R.id.btnClose).setOnClickListener {
             cardClosed = true
             render()
@@ -262,12 +329,17 @@ class MainActivity : AppCompatActivity() {
             NotificationChannel(MUSIC_CHANNEL_ID, "공연장 통과 음악", NotificationManager.IMPORTANCE_DEFAULT)  // 헤드업은 HIGH만. DEFAULT는 목록에만 (LOW는 Pleos 알림 목록에서 숨겨짐)
         )
 
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100)
-        }
+        // 알림 + 차 속도(시연 주행용) 권한을 한 번에 요청
+        val need = listOfNotNull(
+            Manifest.permission.POST_NOTIFICATIONS.takeIf { Build.VERSION.SDK_INT >= 33 },
+            Car.PERMISSION_SPEED
+        ).filter { ActivityCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
+        if (need.isNotEmpty()) ActivityCompat.requestPermissions(this, need.toTypedArray(), 100)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        startSpeed()   // 속도 권한을 방금 받았으면 연결
     }
 
     // 경로·목적지 둘 다 있고, 실제로 안내 중일 때 한 번만 계산
@@ -335,25 +407,58 @@ class MainActivity : AppCompatActivity() {
         passVenue(m.event)
     }
 
+    // 내비 콜백 스레드에서도 불리므로 재생·화면은 메인 스레드에서 (MediaPlayer는 메인에서 다루는 게 안전)
     private fun passVenue(event: EventCard) {
+        if (Looper.myLooper() != Looper.getMainLooper()) { runOnUiThread { passVenue(event) }; return }
+        // 경기장: 진행 중인 경기 스코어 한 줄 + 응원가 (클립이 있으면)
+        if (event.type == "BASEBALL" && event.liveScore != null) {
+            playedEventId = event.id
+            showScore(event)
+        }
         val song = event.songs.filter { it.title.isNotBlank() }.minByOrNull { it.priority } ?: return
         playedEventId = event.id
         MusicPlayer.play(this, song)
         if (MusicPlayer.nowPlaying == null) return   // 클립이 없거나 오디오 포커스를 못 받음
-        runOnUiThread { showMusicNotice(event, song); render() }
+        showMusicNotice(event, song)
+        render()
     }
 
-    // 시연용: 에뮬레이터 내비는 위치가 움직이지 않아 통과 장면을 명령으로 일으킴. 화면은 안 바뀜
+    // 시연용: 에뮬레이터 내비는 위치가 움직이지 않아 통과 장면을 명령으로 바로 일으킴 (음악·스코어가 화면에 뜸)
     // adb shell am broadcast -a com.miraero.driveapp.DEMO_PASS --es id setec_expo
     // 디버그 빌드에서만 등록 (출시본에선 다른 앱이 보낼 수 없게)
     private val demoPassReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context, intent: Intent) {
+            if (intent.action == ACTION_DEMO_DRIVE_STOP) { demoDrive.stop(); return }
             val event = events.firstOrNull { it.id == intent.getStringExtra("id") } ?: return
+            if (intent.action == ACTION_DEMO_DRIVE) {
+                val km = intent.getFloatExtra("km", DEMO_DEFAULT_KM.toFloat()).toDouble()
+                val kmh = if (intent.hasExtra("kmh")) intent.getFloatExtra("kmh", 0f).toDouble() else null
+                demoDrive.start(event, km, kmh)
+                return
+            }
             Log.d("PLEOS_TEST", "[시연] ${event.venue} 통과")
             passVenue(event)
         }
     }
     private val isDebuggable get() = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+
+    private fun showScore(event: EventCard) {
+        scoreLine = "지나가는 ${event.venue}  ·  지금 ${event.liveScore}"
+        uiHandler.removeCallbacks(clearScore)
+        uiHandler.postDelayed(clearScore, 30_000)   // 30초 보여 주고 지움
+        render()
+        val notice = NotificationCompat.Builder(this, MUSIC_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("지나가는 ${event.venue}")
+            .setContentText("${event.name} · 지금 ${event.liveScore}")
+            .setSilent(true)
+            .setAutoCancel(true)
+            .build()
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            == PackageManager.PERMISSION_GRANTED
+        ) NotificationManagerCompat.from(this).notify(SCORE_NOTI_ID, notice)
+        Log.d("PLEOS_TEST", "경기 스코어: ${event.venue} ${event.liveScore}")
+    }
 
     private fun showMusicNotice(event: EventCard, song: Song) {
         val notice = NotificationCompat.Builder(this, MUSIC_CHANNEL_ID)
@@ -386,6 +491,8 @@ class MainActivity : AppCompatActivity() {
             event?.let { "${it.name}로 약 ${jamMin}분 정체" }
         ).joinToString("  ·  "))
         text(R.id.driveNowPlaying, MusicPlayer.nowPlaying?.let { "지금 재생  ${it.title} — ${it.artist}" } ?: "")
+        text(R.id.driveDemo, demoDrive.event?.let { "${it.venue}까지 ${"%.1f".format(demoDrive.remainKm)}km" } ?: "")
+        text(R.id.driveScore, scoreLine ?: "")
 
         // ⑥ 정차 카드
         val hhmm = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
@@ -400,6 +507,9 @@ class MainActivity : AppCompatActivity() {
         text(R.id.eventCrowd, when (event?.crowd) {
             "HIGH" -> "주변 혼잡 예상: 높음"; "MEDIUM" -> "주변 혼잡 예상: 보통"; "LOW" -> "주변 혼잡 예상: 낮음"; else -> ""
         })
+        text(R.id.eventNext, event?.let { e ->
+            e.nextShow?.let { "${if (e.type == "BASEBALL") "다음 경기" else "다음 일정"}  $it" }
+        } ?: "")
         // 곡 제목이 비어 있으면 목록을 숨김 (음악 담당이 events.json을 채우면 보임)
         val songs = event?.songs?.filter { it.title.isNotBlank() }?.sortedBy { it.priority }.orEmpty()
         findViewById<View>(R.id.songsGroup).visibility = if (songs.isEmpty()) View.GONE else View.VISIBLE
@@ -478,6 +588,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         MusicPlayer.onChange = null
+        demoDrive.stop()
+        uiHandler.removeCallbacks(clearScore)
+        carProps?.unregisterCallback(speedCallback)
+        car?.disconnect()
         vehicle.getEvBattery().unregisterEvBatteryStateOfCharge(socListener)
         vehicle.getHVAC().unregisterHvacAcState(hvacAllSeats, acListener)
         vehicle.getGear().unregisterGearSelection(gearListener)
