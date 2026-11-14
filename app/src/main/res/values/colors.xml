@@ -16,4 +16,11 @@
     <color name="stage_on_accent">#FFFFFFFF</color>
     <color name="stage_text">#FF161614</color>
     <color name="stage_muted">#FF6B6962</color>
+
+    <!-- 정차 카드 파란 테마 -->
+    <color name="stage_blue">#FF2563EB</color>
+    <color name="stage_blue_dark">#FF1D4ED8</color>
+    <color name="stage_blue_soft">#FFDCE8FF</color>
+    <color name="stage_blue_tint">#FFEFF5FF</color>
+    <color name="stage_row">#FFF3F5F9</color>
 </resources>

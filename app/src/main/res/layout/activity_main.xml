@@ -7,86 +7,300 @@
     android:layout_height="match_parent"
     android:background="@color/stage_bg">
 
-    <!-- ⑤ 주행 중: 버튼 없음 (주행 중 원칙) -->
+    <!-- ⑤ 주행 화면: 안내 배너 + 목적지·시간 크게. 버튼은 정차(P) 중에만 보임 (주행 중 원칙) -->
     <LinearLayout
         android:id="@+id/driveGroup"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_vertical"
-        android:layout_marginStart="96dp"
-        android:layout_marginEnd="96dp"
+        android:layout_height="match_parent"
+        android:layout_margin="32dp"
         android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/driveTitle"
+        <!-- 최근 안내(헤드업 알림과 같은 내용) -->
+        <LinearLayout
+            android:id="@+id/driveBanner"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="@color/stage_text"
-            android:textSize="64sp"
-            android:maxLines="1"
-            android:ellipsize="end"
-            android:autoSizeTextType="uniform"
-            android:autoSizeMinTextSize="36sp"
-            android:autoSizeMaxTextSize="64sp"
-            android:autoSizeStepGranularity="2sp"
-            android:textStyle="bold" />
+            android:background="@drawable/bg_info_strip"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="28dp"
+            android:paddingTop="18dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="18dp"
+            android:visibility="gone">
 
-        <TextView
-            android:id="@+id/driveDetail"
-            android:layout_width="wrap_content"
+            <ImageView
+                android:id="@+id/driveBannerIcon"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:importantForAccessibility="no"
+                android:rotation="90"
+                android:src="@drawable/ic_battery"
+                android:tint="@color/stage_blue" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="20dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/driveBannerTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/stage_text"
+                    android:textSize="26sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/driveBannerText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textColor="@color/stage_muted"
+                    android:textSize="20sp" />
+            </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/driveBannerClose"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="안내 닫기"
+                android:src="@drawable/ic_close"
+                android:tint="@color/stage_muted" />
+        </LinearLayout>
+
+        <!-- 목적지 · 남은 시간 + 오른쪽 행사 타일 -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:textColor="@color/stage_text"
-            android:textSize="32sp" />
+            android:layout_marginTop="28dp"
+            android:background="@drawable/bg_hero_fade"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:paddingStart="12dp">
+
+                <TextView
+                    android:id="@+id/driveTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/stage_text"
+                    android:textSize="48sp"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:autoSizeTextType="uniform"
+                    android:autoSizeMinTextSize="30sp"
+                    android:autoSizeMaxTextSize="48sp"
+                    android:autoSizeStepGranularity="2sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:gravity="bottom"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/driveMinutes"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:includeFontPadding="false"
+                        android:textColor="@color/stage_blue"
+                        android:textSize="96sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/driveKm"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="20dp"
+                        android:layout_marginBottom="14dp"
+                        android:textColor="@color/stage_muted"
+                        android:textSize="32sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/driveBattery"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:drawableStart="@drawable/ic_battery"
+                        android:drawablePadding="10dp"
+                        android:drawableTint="@color/stage_muted"
+                        android:textColor="@color/stage_text"
+                        android:textSize="24sp" />
+
+                    <View
+                        android:id="@+id/driveMetaDivider"
+                        android:layout_width="1dp"
+                        android:layout_height="24dp"
+                        android:layout_marginStart="20dp"
+                        android:layout_marginEnd="20dp"
+                        android:background="@color/stage_line" />
+
+                    <TextView
+                        android:id="@+id/driveJam"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:drawableStart="@drawable/ic_car"
+                        android:drawablePadding="10dp"
+                        android:drawableTint="@color/stage_muted"
+                        android:textColor="@color/stage_text"
+                        android:textSize="24sp" />
+                </LinearLayout>
+
+                <!-- 예전 두 번째 줄 (지금은 위 아이콘 줄로 대신함, 코드 호환용) -->
+                <TextView
+                    android:id="@+id/driveDetail"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <FrameLayout
+                android:id="@+id/driveHero"
+                android:layout_width="340dp"
+                android:layout_height="230dp"
+                android:layout_marginStart="24dp"
+                android:background="@drawable/bg_event_image">
+
+                <ImageView
+                    android:id="@+id/driveHeroIcon"
+                    android:layout_width="96dp"
+                    android:layout_height="96dp"
+                    android:layout_gravity="center"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_star"
+                    android:tint="#E6FFFFFF" />
+
+                <TextView
+                    android:id="@+id/driveHeroLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom"
+                    android:layout_margin="16dp"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:textColor="#E6FFFFFF"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+            </FrameLayout>
+        </LinearLayout>
+
+        <!-- 시연 주행 · 경기 스코어 · 지금 재생 -->
         <TextView
             android:id="@+id/driveDemo"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="40dp"
+            android:layout_marginTop="24dp"
+            android:drawableStart="@drawable/ic_place"
+            android:drawablePadding="10dp"
+            android:drawableTint="@color/stage_blue"
             android:textColor="@color/stage_text"
-            android:textSize="30sp"
+            android:textSize="28sp"
             android:visibility="gone" />
 
         <TextView
             android:id="@+id/driveScore"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="40dp"
-            android:textColor="@color/stage_text"
-            android:textSize="30sp"
+            android:layout_marginTop="16dp"
+            android:textColor="@color/stage_blue_dark"
+            android:textSize="28sp"
             android:textStyle="bold"
             android:visibility="gone" />
 
-        <!-- 공연장 통과 음악이 나올 때만 보임 -->
         <TextView
             android:id="@+id/driveNowPlaying"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="40dp"
+            android:layout_marginTop="16dp"
+            android:drawableStart="@drawable/ic_music_note"
+            android:drawablePadding="10dp"
+            android:drawableTint="@color/stage_blue"
             android:textColor="@color/stage_text"
-            android:textSize="30sp"
+            android:textSize="28sp"
             android:visibility="gone" />
+
+        <!-- 정차 중에만: 큰 버튼 -->
+        <LinearLayout
+            android:id="@+id/driveActions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="32dp"
+            android:visibility="gone">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnDrivePrimary"
+                android:layout_width="0dp"
+                android:layout_height="96dp"
+                android:layout_weight="1.4"
+                android:textColor="@color/stage_on_accent"
+                android:textSize="28sp"
+                android:textStyle="bold"
+                app:backgroundTint="@color/stage_blue"
+                app:cornerRadius="18dp"
+                app:icon="@drawable/ic_navigation"
+                app:iconGravity="textStart"
+                app:iconSize="30dp"
+                app:iconTint="@color/stage_on_accent" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnDriveInfo"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="0dp"
+                android:layout_height="96dp"
+                android:layout_marginStart="20dp"
+                android:layout_weight="1"
+                android:text="주변 행사 정보"
+                android:textColor="@color/stage_text"
+                android:textSize="26sp"
+                app:cornerRadius="18dp"
+                app:icon="@drawable/ic_place"
+                app:iconGravity="textStart"
+                app:iconTint="@color/stage_text"
+                app:strokeColor="@color/stage_line"
+                app:strokeWidth="2dp" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/driveHint"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="64dp"
+            android:layout_marginTop="32dp"
             android:text="기어를 P에 두면 행사 정보를 볼 수 있어요"
             android:textColor="@color/stage_muted"
-            android:textSize="24sp" />
+            android:textSize="22sp" />
     </LinearLayout>
 
-    <!-- ⑥ 정차·도착 카드 -->
+    <!-- ⑥ 정차·도착 카드 (추천 이벤트) -->
     <ScrollView
         android:id="@+id/parkGroup"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="center_vertical"
-        android:layout_margin="64dp"
+        android:layout_margin="32dp"
         android:background="@drawable/bg_card"
-        android:padding="56dp"
+        android:paddingStart="40dp"
+        android:paddingTop="24dp"
+        android:paddingEnd="40dp"
+        android:paddingBottom="36dp"
         android:visibility="gone">
 
         <LinearLayout
@@ -94,92 +308,247 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
+            <!-- 헤더: ← 추천 이벤트 ………… 북마크 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="72dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageButton
+                    android:id="@+id/btnClose"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:layout_marginStart="-12dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="닫기"
+                    android:src="@drawable/ic_back"
+                    android:tint="@color/stage_text" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:text="추천 이벤트"
+                    android:textColor="@color/stage_text"
+                    android:textSize="30sp"
+                    android:textStyle="bold" />
+
+                <ImageButton
+                    android:id="@+id/btnBookmark"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:layout_marginEnd="-12dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="저장"
+                    android:src="@drawable/ic_bookmark_border"
+                    android:tint="@color/stage_text" />
+            </LinearLayout>
+
             <TextView
                 android:id="@+id/festivalStatus"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
+                android:layout_marginBottom="16dp"
                 android:textColor="@color/stage_muted"
-                android:textSize="22sp" />
+                android:textSize="20sp" />
 
-            <TextView
-                android:id="@+id/eventType"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textSize="26sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/eventName"
+            <!-- 행사 정보 + 오른쪽 이미지 -->
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:textColor="@color/stage_text"
-                android:textSize="56sp"
-                android:maxLines="1"
-                android:ellipsize="end"
-                android:autoSizeTextType="uniform"
-                android:autoSizeMinTextSize="36sp"
-                android:autoSizeMaxTextSize="56sp"
-                android:autoSizeStepGranularity="2sp"
-                android:textStyle="bold" />
+                android:orientation="horizontal">
 
-            <TextView
-                android:id="@+id/eventTime"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:textColor="@color/stage_text"
-                android:textSize="30sp" />
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/eventSummary"
+                    <TextView
+                        android:id="@+id/eventType"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_chip"
+                        android:paddingStart="16dp"
+                        android:paddingTop="4dp"
+                        android:paddingEnd="16dp"
+                        android:paddingBottom="4dp"
+                        android:textColor="@color/stage_blue_dark"
+                        android:textSize="20sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/eventName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:textColor="@color/stage_text"
+                        android:textSize="44sp"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:autoSizeTextType="uniform"
+                        android:autoSizeMinTextSize="30sp"
+                        android:autoSizeMaxTextSize="44sp"
+                        android:autoSizeStepGranularity="2sp"
+                        android:textStyle="bold" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/eventTime"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:drawableStart="@drawable/ic_calendar"
+                            android:drawablePadding="8dp"
+                            android:drawableTint="@color/stage_muted"
+                            android:textColor="@color/stage_text"
+                            android:textSize="24sp" />
+
+                        <View
+                            android:id="@+id/eventMetaDivider"
+                            android:layout_width="1dp"
+                            android:layout_height="24dp"
+                            android:layout_marginStart="20dp"
+                            android:layout_marginEnd="20dp"
+                            android:background="@color/stage_line" />
+
+                        <TextView
+                            android:id="@+id/eventVenue"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:drawableStart="@drawable/ic_place"
+                            android:drawablePadding="8dp"
+                            android:drawableTint="@color/stage_muted"
+                            android:textColor="@color/stage_text"
+                            android:textSize="24sp" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/eventSummary"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:lineSpacingExtra="4dp"
+                        android:textColor="@color/stage_muted"
+                        android:textSize="22sp" />
+
+                    <TextView
+                        android:id="@+id/eventCrowd"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:textColor="@color/stage_muted"
+                        android:textSize="20sp" />
+
+                    <TextView
+                        android:id="@+id/eventNext"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:textColor="@color/stage_muted"
+                        android:textSize="20sp"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <!-- 행사 이미지 자리 (사진이 없어서 종류별 아이콘 타일) -->
+                <FrameLayout
+                    android:id="@+id/eventImage"
+                    android:layout_width="300dp"
+                    android:layout_height="190dp"
+                    android:layout_marginStart="28dp"
+                    android:background="@drawable/bg_event_image">
+
+                    <ImageView
+                        android:id="@+id/eventImageIcon"
+                        android:layout_width="88dp"
+                        android:layout_height="88dp"
+                        android:layout_gravity="center"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_star"
+                        android:tint="#E6FFFFFF" />
+
+                    <TextView
+                        android:id="@+id/eventImageLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom|start"
+                        android:layout_margin="14dp"
+                        android:textColor="#E6FFFFFF"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+                </FrameLayout>
+            </LinearLayout>
+
+            <!-- 거리 · 소요 시간 · 길 안내 -->
+            <LinearLayout
+                android:id="@+id/distanceRow"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:maxLines="3"
-                android:ellipsize="end"
-                android:textColor="@color/stage_text"
-                android:textSize="26sp" />
+                android:layout_marginTop="24dp"
+                android:background="@drawable/bg_info_strip"
+                android:gravity="center_vertical"
+                android:minHeight="80dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="12dp">
 
-            <TextView
-                android:id="@+id/eventCrowd"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:textColor="@color/stage_muted"
-                android:textSize="26sp" />
+                <ImageView
+                    android:layout_width="30dp"
+                    android:layout_height="30dp"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_place"
+                    android:tint="@color/stage_blue" />
 
-            <TextView
-                android:id="@+id/eventNext"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:textColor="@color/stage_muted"
-                android:textSize="26sp"
-                android:visibility="gone" />
+                <TextView
+                    android:id="@+id/distanceText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_weight="1"
+                    android:textColor="@color/stage_text"
+                    android:textSize="24sp" />
 
-            <!-- 곡 제목이 채워진 경우에만 보임 -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnRoute"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="64dp"
+                    android:text="길 안내"
+                    android:textColor="@color/stage_blue_dark"
+                    android:textSize="22sp"
+                    android:textStyle="bold"
+                    app:backgroundTint="@color/stage_card"
+                    app:cornerRadius="14dp"
+                    app:icon="@drawable/ic_navigation"
+                    app:iconTint="@color/stage_blue_dark"
+                    app:strokeColor="@color/stage_blue"
+                    app:strokeWidth="2dp" />
+            </LinearLayout>
+
+            <!-- 플레이리스트 -->
             <LinearLayout
                 android:id="@+id/songsGroup"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="36dp"
+                android:layout_marginTop="28dp"
                 android:orientation="vertical">
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginBottom="28dp"
-                    android:background="@color/stage_line" />
 
                 <TextView
                     android:id="@+id/songsTitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
-                    android:textColor="@color/stage_muted"
-                    android:textSize="24sp" />
+                    android:textColor="@color/stage_text"
+                    android:textSize="24sp"
+                    android:textStyle="bold" />
 
                 <LinearLayout
                     android:id="@+id/eventSongs"
@@ -192,57 +561,59 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:textColor="@color/stage_muted"
-                    android:textSize="24sp" />
+                    android:textSize="22sp" />
             </LinearLayout>
 
+            <!-- 예전 표시 자리 (지금은 곡 행 애니메이션으로 대신함, 코드 호환용) -->
             <TextView
                 android:id="@+id/parkNowPlaying"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:textColor="@color/stage_text"
-                android:textSize="26sp" />
+                android:visibility="gone" />
 
-            <com.google.android.material.button.MaterialButton
+            <View
                 android:id="@+id/btnMusicStop"
-                android:layout_width="match_parent"
-                android:layout_height="80dp"
-                android:text="음악 멈추기"
-                android:backgroundTint="@color/stage_bg"
-                android:textColor="@color/stage_text"
-                android:textSize="26sp"
-                app:strokeColor="@color/stage_line"
-                app:strokeWidth="1dp"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
                 android:visibility="gone" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="48dp">
+                android:layout_marginTop="28dp">
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnPlaylist"
                     android:layout_width="0dp"
-                    android:layout_height="112dp"
-                    android:layout_weight="2"
-                    android:backgroundTint="@color/stage_accent"
+                    android:layout_height="96dp"
+                    android:layout_weight="1.6"
+                    android:text="플레이리스트 재생"
                     android:textColor="@color/stage_on_accent"
-                    android:textSize="30sp"
+                    android:textSize="28sp"
                     android:textStyle="bold"
-                    app:cornerRadius="16dp" />
+                    app:backgroundTint="@color/stage_blue"
+                    app:cornerRadius="18dp"
+                    app:icon="@drawable/ic_play"
+                    app:iconGravity="textStart"
+                    app:iconSize="32dp"
+                    app:iconTint="@color/stage_on_accent" />
 
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnClose"
+                    android:id="@+id/btnLater"
                     style="?attr/materialButtonOutlinedStyle"
                     android:layout_width="0dp"
-                    android:layout_height="112dp"
-                    android:layout_marginStart="24dp"
+                    android:layout_height="96dp"
+                    android:layout_marginStart="20dp"
                     android:layout_weight="1"
-                    android:text="닫기"
+                    android:text="나중에 듣기"
                     android:textColor="@color/stage_text"
-                    android:textSize="30sp"
-                    app:cornerRadius="16dp"
-                    app:strokeColor="@color/stage_line" />
+                    android:textSize="26sp"
+                    app:cornerRadius="18dp"
+                    app:icon="@drawable/ic_bookmark_border"
+                    app:iconGravity="textStart"
+                    app:iconTint="@color/stage_text"
+                    app:strokeColor="@color/stage_line"
+                    app:strokeWidth="2dp" />
             </LinearLayout>
         </LinearLayout>
     </ScrollView>
