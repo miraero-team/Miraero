@@ -28,7 +28,9 @@ data class EventCard(
     val nearbyRoads: List<String>,
     val crowd: String,         // LOW, MEDIUM, HIGH
     val summary: String,
-    val songs: List<Song>
+    val songs: List<Song>,
+    val liveScore: String? = null,   // 경기 중 스코어 한 줄 (시연: json 고정값 / 실서비스: 경기 데이터 API)
+    val nextShow: String? = null     // 도착 카드의 다음 공연·경기 일정
 )
 
 // 행사 카드 꺼내오기 (지금: 앱 안 JSON / 나중: 서버에서 받기)
@@ -70,7 +72,9 @@ object EventRepository {
                 nearbyRoads = roads,
                 crowd = o.getString("crowd"),
                 summary = o.getString("summary"),
-                songs = songs.sortedBy { it.priority }
+                songs = songs.sortedBy { it.priority },
+                liveScore = o.optString("liveScore").ifBlank { null },
+                nextShow = o.optString("nextShow").ifBlank { null }
             )
         }
         cache = list
