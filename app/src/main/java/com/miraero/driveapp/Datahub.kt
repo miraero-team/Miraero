@@ -50,6 +50,8 @@ object DataHub {
     // MainActivity가 계속 알려주는 현재 위치
     var lastLat = 0.0
     var lastLon = 0.0
+    var destLat = 0.0
+    var destLon = 0.0
     var lastEvents: List<EventCard> = emptyList()
         private set
 
@@ -70,7 +72,18 @@ object DataHub {
             main.post { done(list) }
         }.start()
     }
-
+    // 위치를 처음 알게 되면 충전소 목록을 뒤에서 미리 받아둠 → 버튼 누를 땐 바로 나옴
+    private var warmedUp = false
+    fun warmUpChargers() {
+        if (warmedUp || lastLat == 0.0 || chargerSource == null) return
+        warmedUp = true
+        val lat = lastLat
+        val lon = lastLon
+        Thread {
+            Log.d(TAG, "[데이터] 충전소 미리 받기 시작")
+            tryOrNull("충전소 미리 받기") { chargerSource?.findNear(lat, lon, lastEvents) }
+        }.start()
+    }
     // 충전소 1곳: 실데이터 1등 → 실패하면 샘플
     fun findCharger(done: (ChargerInfo) -> Unit) {
         val lat = lastLat

@@ -141,6 +141,7 @@ class MainActivity : AppCompatActivity() {
             curLon = currentLocationInfo.longitude
             DataHub.lastLat = curLat
             DataHub.lastLon = curLon
+            DataHub.warmUpChargers()
             Log.d("PLEOS_TEST", "현재 위치 = ${currentLocationInfo.latitude}, ${currentLocationInfo.longitude} (${currentLocationInfo.address})")
             tryCheckEnergy()   // 위치가 바뀌면 행사장 통과 시각도 다시 계산
         }
@@ -179,6 +180,8 @@ class MainActivity : AppCompatActivity() {
             if (destinationInfo.latitude != 0.0) {
                 destLat = destinationInfo.latitude
                 destLon = destinationInfo.longitude
+                DataHub.destLat = destLat
+                DataHub.destLon = destLon
             }
             Log.d("PLEOS_TEST", "목적지=$destName, 남은거리=${"%.1f".format(remainKm)}km, 남은시간=${remainMin}분")
             destReceived = true
@@ -204,6 +207,7 @@ class MainActivity : AppCompatActivity() {
         // 행사 카드: DataHub가 API → 실패하면 샘플 순서로 가져옴
         DataHub.loadEvents(this) { list ->
             events = list
+            DataHub.chargerSource = EvChargerApiSource   // 충전소: 공공데이터 API (실패하면 샘플)
             // 화면 확인·촬영용. adb shell am start -S -n com.miraero.driveapp/.MainActivity --es demoEvent kspo_concert
             demoEvent = events.firstOrNull { it.id == intent.getStringExtra("demoEvent") }
             if (demoEvent != null) shownEvent = demoEvent
