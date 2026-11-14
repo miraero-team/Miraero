@@ -40,6 +40,9 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
 
@@ -98,6 +101,7 @@ class MainActivity : AppCompatActivity() {
     private var events: List<EventCard> = emptyList()
     private var curLat = 0.0
     private var curLon = 0.0
+    private var curAddress = ""
     private var destLat = 0.0
     private var destLon = 0.0
     private var congestedRoads: List<String> = emptyList()
@@ -119,8 +123,50 @@ class MainActivity : AppCompatActivity() {
     private var parked = false                   // 기어 P
     private var cardClosed = false               // 정차 카드 [닫기] 누름
     private var shownEvent: EventCard? = null    // 경로에 걸린 행사 1등
+    private lateinit var playlistRepository: PlaylistRepository
+    private var playlistEventId: String? = null
+    private var playlistSongs: List<Song> = emptyList()
+    private var playlistStatus = ""
+    private var playlistRequest = 0
     private var demoEvent: EventCard? = null     // 확인용으로 고정한 행사
     private var arrivePercent: Double? = null    // 도착 배터리
+    private var festivals: List<EventCard> = emptyList()
+    private var festivalDate: LocalDate? = null
+    private var festivalLoading = false
+    private var festivalStatus = "축제 정보를 불러오는 중이에요"
+    private var lastFestivalScreenLog = ""
+    private val festivalExecutor = Executors.newSingleThreadExecutor()
+
+    override fun onResume() {
+        super.onResume()
+        val today = LocalDate.now(ZoneId.of("Asia/Seoul"))
+        if (festivalLoading || festivalDate == today) return
+        if (BuildConfig.FESTIVAL_API_KEY.isBlank()) {
+            festivalStatus = "축제 API 키를 설정하면 주변 축제를 볼 수 있어요"
+            render()
+            return
+        }
+        festivalLoading = true
+        festivalStatus = "축제 정보를 불러오는 중이에요"
+        render()
+        festivalExecutor.execute {
+            val result = runCatching { FestivalRepository.fetch(BuildConfig.FESTIVAL_API_KEY, today) }
+            runOnUiThread {
+                if (isDestroyed || isFinishing) return@runOnUiThread
+                festivalLoading = false
+                result.onSuccess {
+                    festivals = it
+                    festivalDate = today
+                    festivalStatus = ""
+                    if (BuildConfig.DEBUG) Log.d("STAGEROAD_FESTIVAL", "조회 완료: 기준일=$today, 오늘 축제=${it.size}개")
+                }.onFailure {
+                    festivalStatus = "축제 정보를 불러오지 못했어요. 앱을 다시 열면 재시도해요"
+                    Log.w("STAGEROAD", "축제 조회 실패: ${it.javaClass.simpleName}")
+                }
+                render()
+            }
+        }
+    }
 
     private val gearListener = object : GearSelectionListener {
         override fun onSelected(gear: VehicleGear?) {
@@ -209,6 +255,7 @@ class MainActivity : AppCompatActivity() {
             DataHub.lastLat = curLat
             DataHub.lastLon = curLon
             DataHub.warmUpChargers()
+            curAddress = currentLocationInfo.address.orEmpty()
             Log.d("PLEOS_TEST", "현재 위치 = ${currentLocationInfo.latitude}, ${currentLocationInfo.longitude} (${currentLocationInfo.address})")
             tryCheckEnergy()   // 위치가 바뀌면 행사장 통과 시각도 다시 계산
         }
@@ -280,6 +327,7 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
+        playlistRepository = LocalPlaylistRepository(EventRepository.load(this))
         // 행사 카드: DataHub가 API → 실패하면 샘플 순서로 가져옴
         DataHub.loadEvents(this) { list ->
             events = list
@@ -298,6 +346,10 @@ class MainActivity : AppCompatActivity() {
         vehicle = Vehicle(this)
         vehicle.initialize()
         vehicle.getGear().registerGearSelection(gearListener)
+        vehicle.getGear().getCurrentGearSelectionState(
+            onComplete = { gearListener.onSelected(it) },
+            onFailed = { gearListener.onFailed(it) }
+        )
         if (isDebuggable) androidx.core.content.ContextCompat.registerReceiver(
             this, demoPassReceiver,
             android.content.IntentFilter("com.miraero.driveapp.DEMO_PASS").apply {
@@ -327,6 +379,7 @@ class MainActivity : AppCompatActivity() {
             true
         }
         startSpeed()
+        findViewById<View>(R.id.btnMusicStop).setOnClickListener { MusicPlayer.stop() }
         findViewById<View>(R.id.btnClose).setOnClickListener {
             cardClosed = true
             render()
@@ -376,6 +429,7 @@ class MainActivity : AppCompatActivity() {
 
     // 경로·목적지 둘 다 있고, 실제로 안내 중일 때 한 번만 계산
     private fun tryCheckEnergy() {
+        runOnUiThread { render() } // 목적지·배터리가 없어도 현재 위치 주변 축제는 표시.
         if (!routeReceived || !destReceived) return
         if (remainKm <= 0.0) {
             Log.d("PLEOS_TEST", "안내 중인 경로 없음 → 대기")
@@ -511,7 +565,16 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.driveGroup).visibility = if (showCard) View.GONE else View.VISIBLE
         findViewById<View>(R.id.parkGroup).visibility = if (showCard) View.VISIBLE else View.GONE
 
-        val event = shownEvent
+        val today = LocalDate.now(ZoneId.of("Asia/Seoul"))
+        val useDestination = remainKm > 0.0 && destLat != 0.0
+        val lat = if (useDestination) destLat else curLat
+        val lon = if (useDestination) destLon else curLon
+        val area = if (useDestination) "목적지" else "현재 위치"
+        val searchName = if (useDestination) destName.ifBlank { "목적지" }
+                         else curAddress.ifBlank { "현재 위치(주소 확인 중)" }
+        val nearby = EventMatcher.nearbyFestivals(festivals, lat, lon, today)
+        val event = demoEvent ?: nearby.firstOrNull() ?: shownEvent
+        loadPlaylist(event)
         val look = event?.let { typeLook(it.type) }
 
         // ⑤ 주행 중: 문장 두 줄
@@ -520,7 +583,7 @@ class MainActivity : AppCompatActivity() {
         val jamMin = (jamHours * 60).toInt()
         text(R.id.driveDetail, if (!guiding) "" else listOfNotNull(
             arrivePercent?.let { "도착 시 배터리 ${"%.0f".format(it)}%" },
-            event?.let { "${it.name}로 약 ${jamMin}분 정체" }
+            event?.let { if (it.dateOnly) "주변 축제: ${it.name}" else "${it.name}로 약 ${jamMin}분 정체" }
         ).joinToString("  ·  "))
         text(R.id.driveNowPlaying, MusicPlayer.nowPlaying?.let { "지금 재생  ${it.title} — ${it.artist}" } ?: "")
         text(R.id.driveDemo, demoDrive.event?.let { "${it.venue}까지 ${"%.1f".format(demoDrive.remainKm)}km" } ?: "")
@@ -530,25 +593,66 @@ class MainActivity : AppCompatActivity() {
         val hhmm = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
         text(R.id.eventType, look?.label ?: "")
         look?.let { findViewById<TextView>(R.id.eventType).setTextColor(it.color) }
-        text(R.id.eventName, event?.name ?: "오늘 경로 근처에는 행사가 없어요")
+        text(R.id.eventName, event?.name ?: "주변 행사 안내")
+        text(R.id.festivalStatus, if (festivalStatus.isNotBlank()) festivalStatus
+            else if (lat == 0.0 && lon == 0.0) "위치를 받으면 반경 2km의 축제를 찾아요"
+            else if (nearby.isEmpty()) "검색 위치: $searchName\n오늘 $area 반경 2km에 등록된 축제가 없어요"
+            else "검색 위치: $searchName\n오늘 $area 반경 2km · 축제 ${nearby.size}개 중 가장 가까운 축제")
         text(R.id.eventTime, if (event == null || look == null) "" else {
-            val time = if (look.startOnly) "${event.start.format(hhmm)} ${look.timeLabel}"
+            val time = if (event.dateOnly) "${event.start.toLocalDate()} ~ ${event.end.toLocalDate()}"
+                       else if (look.startOnly) "${event.start.format(hhmm)} ${look.timeLabel}"
                        else "${event.start.format(hhmm)}–${event.end.format(hhmm)} ${look.timeLabel}"
             "$time  ·  ${event.venue}"
         })
-        text(R.id.eventCrowd, when (event?.crowd) {
+        text(R.id.eventSummary, if (event?.dateOnly == true) event.summary else "")
+        text(R.id.eventCrowd, if (event?.dateOnly == true) "공공데이터포털 · 운영 시각 미확인" else when (event?.crowd) {
             "HIGH" -> "주변 혼잡 예상: 높음"; "MEDIUM" -> "주변 혼잡 예상: 보통"; "LOW" -> "주변 혼잡 예상: 낮음"; else -> ""
         })
         text(R.id.eventNext, event?.let { e ->
             e.nextShow?.let { "${if (e.type == "BASEBALL") "다음 경기" else "다음 일정"}  $it" }
         } ?: "")
         // 곡 제목이 비어 있으면 목록을 숨김 (음악 담당이 events.json을 채우면 보임)
-        val songs = event?.songs?.filter { it.title.isNotBlank() }?.sortedBy { it.priority }.orEmpty()
-        findViewById<View>(R.id.songsGroup).visibility = if (songs.isEmpty()) View.GONE else View.VISIBLE
-        text(R.id.songsTitle, look?.songsTitle ?: "")
-        text(R.id.eventSongs, songs.joinToString("\n") { "${it.title}  —  ${it.artist}" })
-        findViewById<TextView>(R.id.btnPlaylist).text = look?.button ?: ""
-        findViewById<View>(R.id.btnPlaylist).visibility = if (event == null) View.GONE else View.VISIBLE
+        val songs = playlistSongs
+        findViewById<View>(R.id.songsGroup).visibility = if (songs.isEmpty() && playlistStatus.isBlank()) View.GONE else View.VISIBLE
+        text(R.id.songsTitle, if (event?.dateOnly == true) {
+            if (songs.any { it.previewUrl.isNotBlank() }) "축제 분위기 플레이리스트 · 미리듣기"
+            else "축제 분위기 플레이리스트 · 15초 미리듣기"
+        } else look?.songsTitle ?: "")
+        text(R.id.playlistStatus, playlistStatus)
+        val songList = findViewById<android.widget.LinearLayout>(R.id.eventSongs)
+        songList.removeAllViews()
+        songs.forEachIndexed { index, song ->
+            songList.addView(com.google.android.material.button.MaterialButton(this).apply {
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+                text = "${index + 1}. ${song.title} — ${song.artist}  ▶"
+                isAllCaps = false
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                textSize = 24f
+                backgroundTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.stage_accent))
+                setTextColor(getColor(R.color.stage_on_accent))
+                minHeight = (64 * resources.displayMetrics.density).toInt()
+                gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
+                contentDescription = "${song.title}, ${song.artist}, 재생"
+                setOnClickListener { if (parked) MusicPlayer.play(this@MainActivity, songs, index) }
+            })
+        }
+        text(R.id.parkNowPlaying, MusicPlayer.loadingSong?.let { "음원 준비 중: ${it.title}" }
+            ?: MusicPlayer.nowPlaying?.let { "재생 중: ${it.title} — ${it.artist}" }.orEmpty())
+        findViewById<View>(R.id.btnMusicStop).visibility = if (MusicPlayer.nowPlaying == null && MusicPlayer.loadingSong == null) View.GONE else View.VISIBLE
+        findViewById<TextView>(R.id.btnPlaylist).text = "플레이리스트 재생"
+        findViewById<View>(R.id.btnPlaylist).visibility = if (songs.isEmpty()) View.GONE else View.VISIBLE
+        if (BuildConfig.DEBUG) {
+            val state = "화면=${if (showCard) "정차 상세" else "주행 간단"}, 기준=$area, 검색위치=$searchName, 반경=2km, " +
+                "주변=${nearby.size}개, 표시=${event?.name ?: "없음"}, 실데이터=${event?.dateOnly == true}, 상태=$festivalStatus"
+            if (state != lastFestivalScreenLog) {
+                Log.d("STAGEROAD_FESTIVAL", state)
+                lastFestivalScreenLog = state
+            }
+        }
     }
 
     // 행사 종류별 표시 (events.json의 type)
@@ -570,6 +674,10 @@ class MainActivity : AppCompatActivity() {
     // 빈 글자면 칸 자체를 숨김
     private fun text(id: Int, value: String) {
         findViewById<TextView>(id).apply {
+            if (id != R.id.festivalStatus) {
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+            }
             text = value
             visibility = if (value.isBlank()) View.GONE else View.VISIBLE
         }
@@ -577,8 +685,30 @@ class MainActivity : AppCompatActivity() {
 
     // [플레이리스트 열기]: 음악 담당이 채울 자리 (기획서: 음원 플랫폼 연동)
     private fun openPlaylist() {
-        val song = shownEvent?.songs?.filter { it.title.isNotBlank() }?.minByOrNull { it.priority } ?: return
-        MusicPlayer.play(this, song)
+        if (parked) MusicPlayer.play(this, playlistSongs)
+    }
+
+    private fun loadPlaylist(event: EventCard?) {
+        if (isDestroyed || isFinishing || festivalExecutor.isShutdown) return
+        if (event?.id == playlistEventId || !::playlistRepository.isInitialized) return
+        playlistEventId = event?.id
+        val request = ++playlistRequest
+        playlistSongs = emptyList()
+        playlistStatus = if (event == null) "" else "추천 음악을 불러오는 중이에요"
+        if (event == null) return
+        festivalExecutor.execute {
+            val result = runCatching { playlistRepository.recommend(event) }
+            runOnUiThread {
+                if (isDestroyed || isFinishing || playlistRequest != request) return@runOnUiThread
+                playlistSongs = result.getOrDefault(emptyList())
+                playlistStatus = when {
+                    result.isFailure -> "추천 음악을 불러오지 못했어요"
+                    playlistSongs.isEmpty() -> "이 행사에 추천할 음악이 아직 없어요"
+                    else -> ""
+                }
+                render()
+            }
+        }
     }
 
     // ★ 헤드업 알림 띄우기 (내비 위에도 뜸)
@@ -619,6 +749,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        festivalExecutor.shutdownNow()
         MusicPlayer.onChange = null
         retryHandler.removeCallbacks(retryDest)
         demoDrive.stop()

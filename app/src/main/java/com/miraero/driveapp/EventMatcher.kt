@@ -26,6 +26,16 @@ object EventMatcher {
     private const val NEAR_KM = 2.0
     private const val TIME_MARGIN_MIN = 60L
 
+    fun nearbyFestivals(events: List<EventCard>, lat: Double, lon: Double,
+                        today: java.time.LocalDate): List<EventCard> {
+        if (!lat.isFinite() || !lon.isFinite() || lat !in -90.0..90.0 ||
+            lon !in -180.0..180.0 || (lat == 0.0 && lon == 0.0)) return emptyList()
+        return events.filter {
+            !today.isBefore(it.start.toLocalDate()) && !today.isAfter(it.end.toLocalDate())
+        }.map { it to Geo.distanceKm(lat, lon, it.lat, it.lon) }
+            .filter { it.second <= NEAR_KM }.sortedBy { it.second }.map { it.first }
+    }
+
     data class Match(
         val event: EventCard,
         val distToDestKm: Double,
