@@ -574,6 +574,40 @@
                     android:layout_height="wrap_content"
                     android:textColor="@color/stage_muted"
                     android:textSize="22sp" />
+
+                <LinearLayout
+                    android:id="@+id/itunesStoreGroup"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/itunesStoreTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/stage_text"
+                        android:textSize="24sp" />
+
+                    <!-- Apple 공식 배지: https://marketing.services.apple/itunes-identity-guidelines -->
+                    <ImageButton
+                        android:id="@+id/btnItunesStore"
+                        android:layout_width="240dp"
+                        android:layout_height="80dp"
+                        android:padding="8dp"
+                        android:background="?attr/selectableItemBackground"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/itunes_store_badge"
+                        android:contentDescription="iTunes 스토어 열기" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="미국 스토어 · 전체 곡이 아닌 미리듣기\n미리듣기 제공: iTunes (provided courtesy of iTunes)"
+                        android:textColor="@color/stage_muted"
+                        android:textSize="20sp" />
+                </LinearLayout>
             </LinearLayout>
 
             <!-- 예전 표시 자리 (지금은 곡 행 애니메이션으로 대신함, 코드 호환용) -->
