@@ -366,18 +366,38 @@
                     android:layout_weight="1"
                     android:orientation="vertical">
 
-                    <TextView
-                        android:id="@+id/eventType"
+                    <LinearLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:background="@drawable/bg_chip"
-                        android:paddingStart="16dp"
-                        android:paddingTop="4dp"
-                        android:paddingEnd="16dp"
-                        android:paddingBottom="4dp"
-                        android:textColor="@color/stage_blue_dark"
-                        android:textSize="20sp"
-                        android:textStyle="bold" />
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/eventType"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:background="@drawable/bg_chip"
+                            android:paddingStart="16dp"
+                            android:paddingTop="4dp"
+                            android:paddingEnd="16dp"
+                            android:paddingBottom="4dp"
+                            android:textColor="@color/stage_blue_dark"
+                            android:textSize="20sp"
+                            android:textStyle="bold" />
+
+                        <!-- 혼잡도: 글줄 대신 칩 -->
+                        <TextView
+                            android:id="@+id/eventCrowd"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="10dp"
+                            android:background="@drawable/bg_chip_neutral"
+                            android:paddingStart="16dp"
+                            android:paddingTop="4dp"
+                            android:paddingEnd="16dp"
+                            android:paddingBottom="4dp"
+                            android:textColor="@color/stage_muted"
+                            android:textSize="20sp" />
+                    </LinearLayout>
 
                     <TextView
                         android:id="@+id/eventName"
@@ -385,12 +405,12 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
                         android:textColor="@color/stage_text"
-                        android:textSize="44sp"
+                        android:textSize="48sp"
                         android:maxLines="1"
                         android:ellipsize="end"
                         android:autoSizeTextType="uniform"
                         android:autoSizeMinTextSize="30sp"
-                        android:autoSizeMaxTextSize="44sp"
+                        android:autoSizeMaxTextSize="48sp"
                         android:autoSizeStepGranularity="2sp"
                         android:textStyle="bold" />
 
@@ -409,7 +429,7 @@
                             android:drawablePadding="8dp"
                             android:drawableTint="@color/stage_muted"
                             android:textColor="@color/stage_text"
-                            android:textSize="24sp" />
+                            android:textSize="26sp" />
 
                         <View
                             android:id="@+id/eventMetaDivider"
@@ -428,7 +448,7 @@
                             android:drawablePadding="8dp"
                             android:drawableTint="@color/stage_muted"
                             android:textColor="@color/stage_text"
-                            android:textSize="24sp" />
+                            android:textSize="26sp" />
                     </LinearLayout>
 
                     <TextView
@@ -439,14 +459,6 @@
                         android:lineSpacingExtra="4dp"
                         android:textColor="@color/stage_muted"
                         android:textSize="22sp" />
-
-                    <TextView
-                        android:id="@+id/eventCrowd"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:textColor="@color/stage_muted"
-                        android:textSize="20sp" />
 
                     <TextView
                         android:id="@+id/eventNext"

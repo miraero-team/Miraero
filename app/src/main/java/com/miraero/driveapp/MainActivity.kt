@@ -621,7 +621,8 @@ class MainActivity : AppCompatActivity() {
         val hhmm = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
         text(R.id.eventType, look?.label ?: "")
         text(R.id.eventName, event?.name ?: "주변 행사 안내")
-        text(R.id.festivalStatus, if (festivalStatus.isNotBlank()) festivalStatus
+        // 검색 상태 안내는 보여 줄 행사가 없을 때만 (카드 글자 줄이기)
+        text(R.id.festivalStatus, if (event != null) "" else if (festivalStatus.isNotBlank()) festivalStatus
             else if (lat == 0.0 && lon == 0.0) "위치를 받으면 반경 2km의 축제를 찾아요"
             else if (nearby.isEmpty()) "검색 위치: $searchName\n오늘 $area 반경 2km에 등록된 축제가 없어요"
             else "검색 위치: $searchName\n오늘 $area 반경 2km · 축제 ${nearby.size}개 중 가장 가까운 축제")
@@ -635,9 +636,9 @@ class MainActivity : AppCompatActivity() {
         text(R.id.eventVenue, event?.venue.orEmpty())
         findViewById<View>(R.id.eventMetaDivider).visibility = if (event == null) View.GONE else View.VISIBLE
         renderCardExtras(event, look)
-        text(R.id.eventSummary, event?.summary.orEmpty())
-        text(R.id.eventCrowd, if (event?.dateOnly == true) "공공데이터포털 · 운영 시각 미확인" else when (event?.crowd) {
-            "HIGH" -> "주변 혼잡 예상: 높음"; "MEDIUM" -> "주변 혼잡 예상: 보통"; "LOW" -> "주변 혼잡 예상: 낮음"; else -> ""
+        text(R.id.eventSummary, if (event?.dateOnly == true) event.summary else "")   // 샘플 행사 설명은 제목 반복이라 숨김, 실제 축제 설명만 표시
+        text(R.id.eventCrowd, when (event?.crowd) {
+            "HIGH" -> "혼잡 높음"; "MEDIUM" -> "혼잡 보통"; "LOW" -> "혼잡 낮음"; else -> ""
         })
         text(R.id.eventNext, event?.let { e ->
             e.nextShow?.let { "${if (e.type == "BASEBALL") "다음 경기" else "다음 일정"}  $it" }
@@ -707,7 +708,7 @@ class MainActivity : AppCompatActivity() {
     private fun text(id: Int, value: String) {
         findViewById<TextView>(id).apply {
             if (id == R.id.eventSummary) {
-                maxLines = 2
+                maxLines = 1
                 ellipsize = android.text.TextUtils.TruncateAt.END
             } else if (id != R.id.festivalStatus) {
                 maxLines = 1
@@ -745,7 +746,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<android.widget.ImageView>(R.id.eventImageIcon).setImageResource(
             if (event?.type == "FESTIVAL" || event?.type == "EXPO") R.drawable.ic_star else R.drawable.ic_music_note
         )
-        findViewById<TextView>(R.id.eventImageLabel).text = look?.label.orEmpty()
+        findViewById<TextView>(R.id.eventImageLabel).text = ""   // 종류는 위 칩에 이미 있음
 
         // 현재 위치 → 행사장 직선거리. 소요 시간은 도심 평균 25km/h로 어림
         val row = findViewById<View>(R.id.distanceRow)
