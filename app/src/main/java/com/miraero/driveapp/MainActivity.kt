@@ -136,6 +136,15 @@ class MainActivity : AppCompatActivity() {
     private val playlistExecutor = Executors.newSingleThreadExecutor()
     private var playlistFuture: Future<*>? = null
     private var demoEvent: EventCard? = null     // 확인용으로 고정한 행사
+    private var cardEvent: EventCard? = null     // 지금 정차 카드에 보이는 행사 (길 안내·저장 버튼용)
+    private val savedEventIds = mutableSetOf<String>()   // 북마크·나중에 듣기 (앱 실행 중에만 기억)
+    private var songRowsKey = ""
+    // 주행 화면 위 안내 배너 (마지막 헤드업 알림 내용)
+    private var bannerTitle: String? = null
+    private var bannerText = ""
+    private var bannerShort = false
+    private var bannerDismissed = false
+    private var driveEvent: EventCard? = null    // 주행 화면 버튼이 쓰는 행사                 // 곡 목록·재생 상태가 같으면 다시 안 그림 (애니메이션 끊김 방지)
     private var arrivePercent: Double? = null    // 도착 배터리
     private var festivals: List<EventCard> = emptyList()
     private var festivalDate: LocalDate? = null
@@ -390,6 +399,16 @@ class MainActivity : AppCompatActivity() {
         }
         startSpeed()
         findViewById<View>(R.id.btnMusicStop).setOnClickListener { MusicPlayer.stop() }
+        findViewById<View>(R.id.btnBookmark).setOnClickListener { toggleSaved() }
+        findViewById<View>(R.id.btnLater).setOnClickListener { toggleSaved() }
+        findViewById<View>(R.id.btnRoute).setOnClickListener { cardEvent?.let { routeTo(it) } }
+        findViewById<View>(R.id.driveBannerClose).setOnClickListener { bannerDismissed = true; render() }
+        findViewById<View>(R.id.btnDriveInfo).setOnClickListener { cardClosed = false; render() }
+        findViewById<View>(R.id.btnDrivePrimary).setOnClickListener {
+            val e = driveEvent
+            if (remainKm <= 0.0 && e != null) routeTo(e)   // 안내 중이 아니면: 행사장으로 길 안내
+            else { cardClosed = false; render() }          // 안내 중이면: 행사 카드 다시 열기
+        }
         findViewById<View>(R.id.btnClose).setOnClickListener {
             cardClosed = true
             stopPreview()
@@ -591,12 +610,9 @@ class MainActivity : AppCompatActivity() {
 
         // ⑤ 주행 중: 문장 두 줄
         val guiding = remainKm > 0.0
-        text(R.id.driveTitle, if (guiding) "${destName}까지 ${remainMin}분" else "내비에서 목적지를 설정해 주세요")
+        text(R.id.driveTitle, if (guiding) destName.ifBlank { "목적지" } else "내비에서 목적지를 설정해 주세요")
         val jamMin = (jamHours * 60).toInt()
-        text(R.id.driveDetail, if (!guiding) "" else listOfNotNull(
-            arrivePercent?.let { "도착 시 배터리 ${"%.0f".format(it)}%" },
-            event?.let { if (it.dateOnly) "주변 축제: ${it.name}" else "${it.name}로 약 ${jamMin}분 정체" }
-        ).joinToString("  ·  "))
+        renderDrive(guiding, event, jamMin)
         text(R.id.driveNowPlaying, MusicPlayer.nowPlaying?.let { "지금 재생  ${it.title} — ${it.artist}" } ?: "")
         text(R.id.driveDemo, demoDrive.event?.let { "${it.venue}까지 ${"%.1f".format(demoDrive.remainKm)}km" } ?: "")
         text(R.id.driveScore, scoreLine ?: "")
@@ -604,19 +620,22 @@ class MainActivity : AppCompatActivity() {
         // ⑥ 정차 카드
         val hhmm = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
         text(R.id.eventType, look?.label ?: "")
-        look?.let { findViewById<TextView>(R.id.eventType).setTextColor(it.color) }
         text(R.id.eventName, event?.name ?: "주변 행사 안내")
         text(R.id.festivalStatus, if (festivalStatus.isNotBlank()) festivalStatus
             else if (lat == 0.0 && lon == 0.0) "위치를 받으면 반경 2km의 축제를 찾아요"
             else if (nearby.isEmpty()) "검색 위치: $searchName\n오늘 $area 반경 2km에 등록된 축제가 없어요"
             else "검색 위치: $searchName\n오늘 $area 반경 2km · 축제 ${nearby.size}개 중 가장 가까운 축제")
-        text(R.id.eventTime, if (event == null || look == null) "" else {
-            val time = if (event.dateOnly) "${event.start.toLocalDate()} ~ ${event.end.toLocalDate()}"
-                       else if (look.startOnly) "${event.start.format(hhmm)} ${look.timeLabel}"
-                       else "${event.start.format(hhmm)}–${event.end.format(hhmm)} ${look.timeLabel}"
-            "$time  ·  ${event.venue}"
+        val md = java.time.format.DateTimeFormatter.ofPattern("yyyy.MM.dd(E)", java.util.Locale.KOREAN)
+        text(R.id.eventTime, if (event == null || look == null) "" else when {
+            event.dateOnly -> if (event.start.toLocalDate() == event.end.toLocalDate()) event.start.format(md)
+                              else "${event.start.format(md)} – ${event.end.format(md)}"
+            look.startOnly -> "${event.start.format(hhmm)} ${look.timeLabel}"
+            else -> "${event.start.format(hhmm)}–${event.end.format(hhmm)} ${look.timeLabel}"
         })
-        text(R.id.eventSummary, if (event?.dateOnly == true) event.summary else "")
+        text(R.id.eventVenue, event?.venue.orEmpty())
+        findViewById<View>(R.id.eventMetaDivider).visibility = if (event == null) View.GONE else View.VISIBLE
+        renderCardExtras(event, look)
+        text(R.id.eventSummary, event?.summary.orEmpty())
         text(R.id.eventCrowd, if (event?.dateOnly == true) "공공데이터포털 · 운영 시각 미확인" else when (event?.crowd) {
             "HIGH" -> "주변 혼잡 예상: 높음"; "MEDIUM" -> "주변 혼잡 예상: 보통"; "LOW" -> "주변 혼잡 예상: 낮음"; else -> ""
         })
@@ -626,42 +645,17 @@ class MainActivity : AppCompatActivity() {
         // 곡 제목이 비어 있으면 목록을 숨김 (음악 담당이 events.json을 채우면 보임)
         val songs = playlistSongs
         findViewById<View>(R.id.songsGroup).visibility = if (songs.isEmpty() && playlistStatus.isBlank()) View.GONE else View.VISIBLE
+        // 곡 목록 제목: iTunes 곡(main) / 축제 클립 / 행사 기본 문구 + 곡 수(card-design)
         val remote = songs.any { it.storeUrl.isNotBlank() }
-        text(R.id.songsTitle, if (remote) {
+        val songsLabel = if (remote) {
             if (event?.type == "CONCERT") "공연 아티스트 음악 · iTunes 미리듣기"
             else "축제 분위기 음악 · 출연진 정보 아님"
         } else if (event?.dateOnly == true) "축제 분위기 플레이리스트 · 15초 미리듣기"
-        else look?.songsTitle ?: "")
-        text(R.id.playlistStatus, playlistStatus)
-        val songList = findViewById<android.widget.LinearLayout>(R.id.eventSongs)
-        songList.removeAllViews()
-        songs.forEachIndexed { index, song ->
-            songList.addView(com.google.android.material.button.MaterialButton(this).apply {
-                layoutParams = android.widget.LinearLayout.LayoutParams(
-                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
-                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
-                )
-                text = "${index + 1}. ${song.title} — ${song.artist}  ${if (song.previewUrl.isNotBlank()) "미리듣기" else "▶"}"
-                isAllCaps = false
-                maxLines = 1
-                ellipsize = android.text.TextUtils.TruncateAt.END
-                textSize = 24f
-                backgroundTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.stage_accent))
-                setTextColor(getColor(R.color.stage_on_accent))
-                minHeight = (64 * resources.displayMetrics.density).toInt()
-                gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
-                contentDescription = "${song.title}, ${song.artist}, ${if (song.previewUrl.isNotBlank()) "미리듣기" else "재생"}"
-                setOnClickListener {
-                    if (parked) {
-                        if (song.previewUrl.isNotBlank()) {
-                            selectedPreview = song
-                            MusicPlayer.play(this@MainActivity, song)
-                        }
-                        else MusicPlayer.play(this@MainActivity, songs, index)
-                    }
-                }
-            })
-        }
+        else look?.songsTitle ?: ""
+        text(R.id.songsTitle, if (songs.isEmpty() || songsLabel.isBlank()) songsLabel else "$songsLabel  (${songs.size}곡)")
+        text(R.id.playlistStatus, MusicPlayer.errorMessage ?: playlistStatus)
+        renderSongRows(songs)
+        // iTunes 스토어 배지 (main)
         val storeSong = selectedPreview?.takeIf { it in songs && it.storeUrl.isNotBlank() }
             ?: songs.firstOrNull { it.storeUrl.isNotBlank() }
         findViewById<View>(R.id.itunesStoreGroup).visibility = if (storeSong == null) View.GONE else View.VISIBLE
@@ -670,11 +664,19 @@ class MainActivity : AppCompatActivity() {
             contentDescription = storeSong?.let { "${it.title}, ${it.artist}, iTunes 스토어 열기" }
             setOnClickListener { storeSong?.let { openStore(it) } }
         }
-        text(R.id.parkNowPlaying, MusicPlayer.errorMessage ?: MusicPlayer.loadingSong?.let { "음원 준비 중: ${it.title}" }
-            ?: MusicPlayer.nowPlaying?.let { "재생 중: ${it.title} — ${it.artist}" }.orEmpty())
-        findViewById<View>(R.id.btnMusicStop).visibility = if (MusicPlayer.nowPlaying == null && MusicPlayer.loadingSong == null) View.GONE else View.VISIBLE
-        findViewById<TextView>(R.id.btnPlaylist).text = if (playlistFailed) "다시 불러오기" else "플레이리스트 재생"
-        findViewById<View>(R.id.btnPlaylist).visibility = if (playlistFailed || (songs.isNotEmpty() && !remote)) View.VISIBLE else View.GONE
+        // 재생 버튼: 재생 중이면 멈추기(card-design), 불러오기 실패면 다시 불러오기(main)
+        val playing = MusicPlayer.nowPlaying != null || MusicPlayer.loadingSong != null
+        findViewById<View>(R.id.parkNowPlaying).visibility = View.GONE
+        findViewById<com.google.android.material.button.MaterialButton>(R.id.btnPlaylist).apply {
+            text = when {
+                playing -> "재생 멈추기"
+                playlistFailed -> "다시 불러오기"
+                else -> "플레이리스트 재생"
+            }
+            setIconResource(if (playing) R.drawable.ic_stop else R.drawable.ic_play)
+            visibility = if (playing || playlistFailed || (songs.isNotEmpty() && !remote)) View.VISIBLE else View.GONE
+        }
+        findViewById<View>(R.id.btnLater).visibility = if (event == null) View.GONE else View.VISIBLE
         if (BuildConfig.DEBUG) {
             val state = "화면=${if (showCard) "정차 상세" else "주행 간단"}, 기준=$area, 검색위치=$searchName, 반경=2km, " +
                 "주변=${nearby.size}개, 표시=${event?.name ?: "없음"}, 실데이터=${event?.dateOnly == true}, 상태=$festivalStatus"
@@ -704,7 +706,10 @@ class MainActivity : AppCompatActivity() {
     // 빈 글자면 칸 자체를 숨김
     private fun text(id: Int, value: String) {
         findViewById<TextView>(id).apply {
-            if (id != R.id.festivalStatus) {
+            if (id == R.id.eventSummary) {
+                maxLines = 2
+                ellipsize = android.text.TextUtils.TruncateAt.END
+            } else if (id != R.id.festivalStatus) {
                 maxLines = 1
                 ellipsize = android.text.TextUtils.TruncateAt.END
             }
@@ -725,11 +730,201 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openPlaylist() {
+        if (MusicPlayer.nowPlaying != null || MusicPlayer.loadingSong != null) { MusicPlayer.stop(); return }
         if (!parked) return
         if (playlistFailed) {
             playlistEventId = null
             render()
         } else if (playlistSongs.none { it.previewUrl.isNotBlank() }) MusicPlayer.play(this, playlistSongs)
+    }
+
+    // ===== 정차 카드: 이미지 타일 · 거리 · 저장 =====
+    private fun renderCardExtras(event: EventCard?, look: TypeLook?) {
+        cardEvent = event
+        findViewById<View>(R.id.eventImage).visibility = if (event == null) View.GONE else View.VISIBLE
+        findViewById<android.widget.ImageView>(R.id.eventImageIcon).setImageResource(
+            if (event?.type == "FESTIVAL" || event?.type == "EXPO") R.drawable.ic_star else R.drawable.ic_music_note
+        )
+        findViewById<TextView>(R.id.eventImageLabel).text = look?.label.orEmpty()
+
+        // 현재 위치 → 행사장 직선거리. 소요 시간은 도심 평균 25km/h로 어림
+        val row = findViewById<View>(R.id.distanceRow)
+        if (event == null || (curLat == 0.0 && curLon == 0.0)) {
+            row.visibility = View.GONE
+        } else {
+            val km = Geo.distanceKm(curLat, curLon, event.lat, event.lon)
+            val min = kotlin.math.max(1, kotlin.math.ceil(km / 25.0 * 60).toInt())
+            findViewById<TextView>(R.id.distanceText).text =
+                "현재 위치에서 ${"%.1f".format(km)} km   |   약 ${min}분 소요"
+            row.visibility = View.VISIBLE
+        }
+
+        val saved = event != null && event.id in savedEventIds
+        findViewById<android.widget.ImageButton>(R.id.btnBookmark).apply {
+            setImageResource(if (saved) R.drawable.ic_bookmark else R.drawable.ic_bookmark_border)
+            imageTintList = android.content.res.ColorStateList.valueOf(getColor(if (saved) R.color.stage_blue else R.color.stage_text))
+            visibility = if (event == null) View.INVISIBLE else View.VISIBLE
+        }
+        findViewById<com.google.android.material.button.MaterialButton>(R.id.btnLater).apply {
+            text = if (saved) "저장했어요" else "나중에 듣기"
+            setIconResource(if (saved) R.drawable.ic_bookmark else R.drawable.ic_bookmark_border)
+            val c = getColor(if (saved) R.color.stage_blue_dark else R.color.stage_text)
+            setTextColor(c); iconTint = android.content.res.ColorStateList.valueOf(c)
+        }
+    }
+
+    private fun toggleSaved() {
+        val id = cardEvent?.id ?: return
+        if (!savedEventIds.add(id)) savedEventIds.remove(id)
+        Log.d("PLEOS_TEST", "저장 ${if (id in savedEventIds) "추가" else "취소"}: ${cardEvent?.name}")
+        render()
+    }
+
+    // [길 안내]: 행사장을 내비 목적지로 설정
+    private fun routeTo(e: EventCard) {
+        naviHelper.requestRoute(
+            RouteInfo(
+                latitude = e.lat,
+                longitude = e.lon,
+                poiId = "",
+                poiName = e.name,
+                poiSubId = "0",
+                address = e.venue
+            )
+        )
+        Log.d("PLEOS_TEST", "길 안내 요청: ${e.name} (${e.lat}, ${e.lon})")
+    }
+
+    // ===== 주행 화면: 배너 · 남은 시간 · 행사 타일 · 정차 중 버튼 =====
+    private fun renderDrive(guiding: Boolean, event: EventCard?, jamMin: Int) {
+        driveEvent = event
+        // 남은 시간: 숫자 크게, "분"은 작게
+        findViewById<TextView>(R.id.driveMinutes).apply {
+            if (guiding) {
+                val sp = android.text.SpannableString("${remainMin}분")
+                sp.setSpan(android.text.style.RelativeSizeSpan(0.55f), sp.length - 1, sp.length, 0)
+                text = sp; visibility = View.VISIBLE
+            } else visibility = View.GONE
+        }
+        text(R.id.driveKm, if (guiding) "·  ${"%.1f".format(remainKm)} km" else "")
+        val battery = if (guiding) arrivePercent?.let { "도착 시 배터리 ${"%.0f".format(it)}%" }.orEmpty() else ""
+        val jam = if (!guiding || event == null) "" else
+            if (event.dateOnly) "주변 축제: ${event.name}" else "${event.name}로 약 ${jamMin}분 정체"
+        text(R.id.driveBattery, battery)
+        text(R.id.driveJam, jam)
+        findViewById<View>(R.id.driveMetaDivider).visibility = if (battery.isNotBlank() && jam.isNotBlank()) View.VISIBLE else View.GONE
+        text(R.id.driveDetail, "")
+
+        // 오른쪽 타일: 행사 종류 아이콘 + 행사명
+        findViewById<View>(R.id.driveHero).visibility = if (event == null) View.GONE else View.VISIBLE
+        findViewById<android.widget.ImageView>(R.id.driveHeroIcon).setImageResource(
+            if (event?.type == "FESTIVAL" || event?.type == "EXPO") R.drawable.ic_star else R.drawable.ic_music_note
+        )
+        findViewById<TextView>(R.id.driveHeroLabel).text = event?.name.orEmpty()
+
+        // 배너: 마지막 안내. 배터리 부족이면 주황
+        val showBanner = bannerTitle != null && !bannerDismissed && guiding
+        findViewById<View>(R.id.driveBanner).apply {
+            visibility = if (showBanner) View.VISIBLE else View.GONE
+            setBackgroundResource(if (bannerShort) R.drawable.bg_banner_warn else R.drawable.bg_info_strip)
+        }
+        findViewById<android.widget.ImageView>(R.id.driveBannerIcon).imageTintList =
+            android.content.res.ColorStateList.valueOf(if (bannerShort) 0xFFE8590C.toInt() else getColor(R.color.stage_blue))
+        findViewById<TextView>(R.id.driveBannerTitle).text = bannerTitle.orEmpty()
+        findViewById<TextView>(R.id.driveBannerText).apply {
+            text = bannerText.replace("\n", "  ")
+            maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+
+        // 버튼은 정차(P) 중에만 (주행 중엔 화면 조작 최소화)
+        findViewById<View>(R.id.driveActions).visibility = if (parked && event != null) View.VISIBLE else View.GONE
+        findViewById<com.google.android.material.button.MaterialButton>(R.id.btnDrivePrimary).apply {
+            text = if (!guiding) "경로 안내 시작" else "행사 정보 보기"
+            setIconResource(if (!guiding) R.drawable.ic_navigation else R.drawable.ic_star)
+        }
+        findViewById<View>(R.id.btnDriveInfo).visibility = if (guiding) View.GONE else View.VISIBLE
+        findViewById<View>(R.id.driveHint).visibility = if (parked) View.GONE else View.VISIBLE
+    }
+
+    // ===== 곡 목록: 둥근 행 + 썸네일 + ▶ / 재생 중 이퀄라이저 =====
+    private fun renderSongRows(songs: List<Song>) {
+        val playing = MusicPlayer.nowPlaying
+        val loading = MusicPlayer.loadingSong
+        val key = songs.joinToString("|") { it.title + it.clip + it.previewUrl } + "#" + playing?.title + "#" + loading?.title
+        if (key == songRowsKey) return
+        songRowsKey = key
+
+        val list = findViewById<android.widget.LinearLayout>(R.id.eventSongs)
+        list.removeAllViews()
+        val dp = resources.displayMetrics.density
+        fun px(v: Int) = (v * dp).toInt()
+        val thumbColors = intArrayOf(0xFF2563EB.toInt(), 0xFF3B82F6.toInt(), 0xFF1D4ED8.toInt(), 0xFF60A5FA.toInt())
+
+        songs.forEachIndexed { index, song ->
+            val isPlaying = playing == song
+            val isLoading = loading == song
+            val row = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setBackgroundResource(if (isPlaying || isLoading) R.drawable.bg_song_row_playing else R.drawable.bg_song_row)
+                setPadding(px(14), px(12), px(20), px(12))
+                minimumHeight = px(84)
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { if (index > 0) topMargin = px(12) }
+                isClickable = true
+                contentDescription = "${song.title}, ${song.artist}, ${if (isPlaying) "재생 중, 누르면 멈춤" else "재생"}"
+                setOnClickListener {
+                    if (isPlaying || isLoading) MusicPlayer.stop()
+                    else if (parked) {
+                        // iTunes 곡은 한 곡 미리듣기 + 스토어 배지 갱신(main), 축제 클립은 목록 이어 재생
+                        if (song.previewUrl.isNotBlank()) {
+                            selectedPreview = song
+                            MusicPlayer.play(this@MainActivity, song)
+                        } else MusicPlayer.play(this@MainActivity, songs, index)
+                    }
+                }
+            }
+            // 썸네일: 실제 앨범 커버 대신 파란 타일 + 음표 (저작권)
+            row.addView(android.widget.FrameLayout(this).apply {
+                layoutParams = android.widget.LinearLayout.LayoutParams(px(60), px(60))
+                background = androidx.core.content.ContextCompat.getDrawable(this@MainActivity, R.drawable.bg_thumb)?.mutate()
+                backgroundTintList = android.content.res.ColorStateList.valueOf(thumbColors[index % thumbColors.size])
+                addView(android.widget.ImageView(this@MainActivity).apply {
+                    setImageResource(R.drawable.ic_music_note)
+                    imageTintList = android.content.res.ColorStateList.valueOf(0xFFFFFFFF.toInt())
+                    layoutParams = android.widget.FrameLayout.LayoutParams(px(32), px(32), android.view.Gravity.CENTER)
+                })
+            })
+            row.addView(TextView(this).apply {
+                layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    .apply { marginStart = px(20) }
+                text = "${song.title}  –  ${song.artist}"
+                textSize = 24f
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setTextColor(getColor(if (isPlaying) R.color.stage_blue_dark else R.color.stage_text))
+                if (isPlaying) setTypeface(typeface, android.graphics.Typeface.BOLD)
+            })
+            // 오른쪽: 재생 중 → 이퀄라이저 / 준비 중 → 로딩 / 평소 → ▶
+            row.addView(when {
+                isPlaying -> EqualizerView(this, getColor(R.color.stage_blue)).apply {
+                    layoutParams = android.widget.LinearLayout.LayoutParams(px(34), px(30))
+                }
+                isLoading -> android.widget.ProgressBar(this).apply {
+                    isIndeterminate = true
+                    indeterminateTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.stage_blue))
+                    layoutParams = android.widget.LinearLayout.LayoutParams(px(34), px(34))
+                }
+                else -> android.widget.ImageView(this).apply {
+                    setImageResource(R.drawable.ic_play)
+                    imageTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.stage_text))
+                    layoutParams = android.widget.LinearLayout.LayoutParams(px(36), px(36))
+                }
+            })
+            list.addView(row)
+        }
     }
 
     private fun loadPlaylist(event: EventCard?) {
@@ -762,6 +957,8 @@ class MainActivity : AppCompatActivity() {
 
     // ★ 헤드업 알림 띄우기 (내비 위에도 뜸)
     private fun showAlert(title: String, text: String, askCharge: Boolean) {
+        bannerTitle = title; bannerText = text; bannerShort = askCharge; bannerDismissed = false
+        render()
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
