@@ -12,7 +12,7 @@
 
 ## APK 다운로드
 
-- [Roady APK 다운로드](https://raw.githubusercontent.com/miraero-team/Miraero/main/apk/release/miraero_roady_release.apk)
+- [Roady APK 다운로드](https://github.com/miraero-team/Miraero/releases/tag/v1.0.0)
 - **저장소 내 위치**: `apk/release/miraero_roady_release.apk`
 - **실행 환경**: Pleos Connect 에뮬레이터
 
